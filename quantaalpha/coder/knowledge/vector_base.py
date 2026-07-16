@@ -44,6 +44,11 @@ class KnowledgeMetaData:
         -------
 
         """
+        from quantaalpha.llm.config import LLM_SETTINGS
+
+        # 未配置 embedding 模型时跳过，避免调 API 失败拖垮主流程
+        if not LLM_SETTINGS.embedding_model:
+            return
         if self.embedding is None:
             self.embedding = APIBackend().create_embedding(input_content=self.content)
 
