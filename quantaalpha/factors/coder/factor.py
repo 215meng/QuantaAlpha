@@ -177,10 +177,17 @@ class FactorFBWorkspace(FBWorkspace):
                 else:
                     env['PYTHONPATH'] = pythonpath
                 
+                # Windows: 必须用绝对路径 + shell=False。
+                # shell=True 在 cmd.exe 下会丢失 PYTHONPATH 环境变量，
+                # 且相对路径的 cwd 解析会导致路径拼接错误 / 文件找不到。
+                abs_workspace = self.workspace_path.resolve()
+                abs_code_path = execution_code_path.resolve()
+                # 用 sys.executable 确保使用当前 conda 环境的 python（而非 base）
+                python_bin = sys.executable if FACTOR_COSTEER_SETTINGS.python_bin == "python" else FACTOR_COSTEER_SETTINGS.python_bin
                 subprocess.check_output(
-                    f"{FACTOR_COSTEER_SETTINGS.python_bin} {execution_code_path}",
-                    shell=True,
-                    cwd=self.workspace_path,
+                    [python_bin, str(abs_code_path)],
+                    shell=False,
+                    cwd=str(abs_workspace),
                     stderr=subprocess.STDOUT,
                     timeout=FACTOR_COSTEER_SETTINGS.file_based_execution_timeout,
                     env=env,

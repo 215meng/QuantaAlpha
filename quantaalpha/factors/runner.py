@@ -114,14 +114,18 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
                                 else:
                                     os.symlink(str(data_source / "daily_pv.h5"), str(daily_pv_link))
                             
-                            # Execute factor
+                            # Execute factor（Windows: 绝对路径 + shell=False + PYTHONPATH）
                             import subprocess
                             env = os.environ.copy()
-                            project_root = Path(__file__).parent.parent.parent.parent.parent
-                            env['PYTHONPATH'] = str(project_root) + os.pathsep + env.get('PYTHONPATH', '')
+                            project_root = str(Path(__file__).parent.parent.parent.parent.parent.resolve())
+                            sep = ';' if sys.platform == 'win32' else ':'
+                            env['PYTHONPATH'] = project_root + sep + env.get('PYTHONPATH', '')
+                            abs_ws = ws.workspace_path.resolve()
+                            abs_factor = abs_ws / 'factor.py'
                             subprocess.check_output(
-                                [sys.executable, str(ws.workspace_path / 'factor.py')],
-                                cwd=str(ws.workspace_path),
+                                [sys.executable, str(abs_factor)],
+                                shell=False,
+                                cwd=str(abs_ws),
                                 stderr=subprocess.STDOUT,
                                 env=env,
                                 timeout=1200,
