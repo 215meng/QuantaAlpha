@@ -306,28 +306,42 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
             qlib_symlink_dir.mkdir(parents=True, exist_ok=True)
             cn_data_link = qlib_symlink_dir / "cn_data"
             try:
-                need_create = False
-                if cn_data_link.exists() or cn_data_link.is_symlink() or _is_junction(cn_data_link):
-                    # Check if current link/junction already points to the correct target
-                    try:
-                        current_target = str(Path(os.readlink(str(cn_data_link))).resolve())
-                        expected_target = str(Path(qlib_data).resolve())
-                        if current_target != expected_target:
+                # 检查是否已有有效的数据目录（真实目录含 calendars/features/instruments）
+                _has_valid_data = (
+                    cn_data_link.is_dir()
+                    and (cn_data_link / "calendars").exists()
+                    and (cn_data_link / "features").exists()
+                    and (cn_data_link / "instruments").exists()
+                )
+                if _has_valid_data:
+                    # 已有有效数据，无需创建链接
+                    logger.info(f"Qlib data already available at {cn_data_link}, skipping link creation")
+                    need_create = False
+                else:
+                    need_create = False
+                    if cn_data_link.exists() or cn_data_link.is_symlink() or _is_junction(cn_data_link):
+                        # 检查现有链接是否指向正确目标
+                        try:
+                            current_target = str(Path(os.readlink(str(cn_data_link))).resolve())
+                            expected_target = str(Path(qlib_data).resolve())
+                            if current_target != expected_target:
+                                _remove_link_or_junction(cn_data_link)
+                                need_create = True
+                        except OSError:
                             _remove_link_or_junction(cn_data_link)
                             need_create = True
-                    except OSError:
-                        _remove_link_or_junction(cn_data_link)
+                    else:
                         need_create = True
-                else:
-                    need_create = True
 
                 if need_create:
                     if sys.platform == "win32":
-                        # Windows: use directory junction (no admin privileges required)
+                        # Windows: 使用目录 junction（无需管理员权限）
                         import _winapi
                         _winapi.CreateJunction(str(Path(qlib_data).resolve()), str(cn_data_link))
+                        logger.info(f"Created junction: {cn_data_link} -> {qlib_data}")
                     else:
                         cn_data_link.symlink_to(qlib_data)
+                        logger.info(f"Created symlink: {cn_data_link} -> {qlib_data}")
             except Exception as link_err:
                 print(f"[WARN] Failed to create qlib data link: {link_err}")
                 print(f"[WARN] Please manually create a link: {cn_data_link} -> {qlib_data}")
