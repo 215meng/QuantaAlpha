@@ -18,10 +18,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import colorama
 import yaml
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# Initialize colorama for ANSI color support on Windows
+colorama.init()
 
 # ---------------------------------------------------------------------------
 # Resolve project root (two levels up from this file: frontend-v2/backend/)
@@ -94,6 +98,88 @@ ws_connections: Dict[str, List[WebSocket]] = {}  # task_id -> list of WS
 
 
 # ========================== Utility Helpers ==========================
+
+IS_WIN = sys.platform == "win32"
+
+
+def _is_junction(path: Path) -> bool:
+    """Check if a path is a Windows directory junction."""
+    if not IS_WIN:
+        return False
+    try:
+        import ctypes
+        attrs = ctypes.windll.kernel32.GetFileAttributesW(str(path))
+        if attrs == -1:
+            return False
+        FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+        return bool(attrs & FILE_ATTRIBUTE_REPARSE_POINT)
+    except Exception:
+        return False
+
+
+def _remove_link_or_junction(path: Path):
+    """Remove a symlink or junction in a cross-platform way."""
+    if IS_WIN and _is_junction(path):
+        # Junctions on Windows appear as directories; use os.rmdir (not shutil.rmtree!)
+        os.rmdir(str(path))
+    elif path.is_symlink():
+        path.unlink()
+    elif path.is_dir():
+        os.rmdir(str(path))
+
+
+def _kill_process_tree(pid: int):
+    """Kill a process and its children in a cross-platform way."""
+    if IS_WIN:
+        # On Windows, use taskkill /F /T to kill the whole process tree
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(pid)],
+                capture_output=True, timeout=10,
+            )
+        except Exception:
+            pass
+    else:
+        # Unix: try graceful SIGTERM first
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+
+
+async def _kill_process_tree_async(pid: int):
+    """Async version: kill a process tree with graceful shutdown attempt."""
+    if IS_WIN:
+        # On Windows, taskkill /F /T kills the process tree immediately
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                "taskkill", "/F", "/T", "/PID", str(pid),
+                stdout=asyncio.subprocess.DEVNULL,
+                stderr=asyncio.subprocess.DEVNULL,
+            )
+            await asyncio.wait_for(proc.wait(), timeout=10)
+        except Exception:
+            pass
+    else:
+        try:
+            # Try graceful termination first
+            os.kill(pid, signal.SIGTERM)
+            # Wait briefly for cleanup
+            for _ in range(5):
+                try:
+                    os.kill(pid, 0)  # Check if alive
+                    await asyncio.sleep(0.1)
+                except ProcessLookupError:
+                    return
+            # Force kill if still running
+            try:
+                os.kill(pid, 0)
+                os.kill(pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        except ProcessLookupError:
+            pass
+
 
 def _gen_id() -> str:
     return str(uuid.uuid4())[:8]
@@ -213,16 +299,38 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
         os.makedirs(env["WORKSPACE_PATH"], exist_ok=True)
         os.makedirs(env["PICKLE_CACHE_FOLDER_PATH_STR"], exist_ok=True)
 
-        # Qlib symlink
+        # Qlib symlink / junction
         qlib_data = dotenv.get("QLIB_DATA_DIR", "")
         if qlib_data:
             qlib_symlink_dir = Path.home() / ".qlib" / "qlib_data"
             qlib_symlink_dir.mkdir(parents=True, exist_ok=True)
             cn_data_link = qlib_symlink_dir / "cn_data"
-            if not cn_data_link.exists() or os.readlink(str(cn_data_link)) != qlib_data:
-                if cn_data_link.is_symlink():
-                    cn_data_link.unlink()
-                cn_data_link.symlink_to(qlib_data)
+            try:
+                need_create = False
+                if cn_data_link.exists() or cn_data_link.is_symlink() or _is_junction(cn_data_link):
+                    # Check if current link/junction already points to the correct target
+                    try:
+                        current_target = str(Path(os.readlink(str(cn_data_link))).resolve())
+                        expected_target = str(Path(qlib_data).resolve())
+                        if current_target != expected_target:
+                            _remove_link_or_junction(cn_data_link)
+                            need_create = True
+                    except OSError:
+                        _remove_link_or_junction(cn_data_link)
+                        need_create = True
+                else:
+                    need_create = True
+
+                if need_create:
+                    if sys.platform == "win32":
+                        # Windows: use directory junction (no admin privileges required)
+                        import _winapi
+                        _winapi.CreateJunction(str(Path(qlib_data).resolve()), str(cn_data_link))
+                    else:
+                        cn_data_link.symlink_to(qlib_data)
+            except Exception as link_err:
+                print(f"[WARN] Failed to create qlib data link: {link_err}")
+                print(f"[WARN] Please manually create a link: {cn_data_link} -> {qlib_data}")
 
         # Build a temporary config with frontend parameter overrides
         base_config_path = PROJECT_ROOT / "configs" / "experiment.yaml"
@@ -274,9 +382,9 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
             import traceback
             traceback.print_exc()
 
-        # Build CLI args
+        # Build CLI args — use -u for unbuffered stdout/stderr so output streams in real time
         cmd = [
-            sys.executable, "-m", "quantaalpha.cli", "mine",
+            sys.executable, "-u", "-m", "quantaalpha.cli", "mine",
             "--direction", req.direction,
             "--config_path", config_path_to_use,
         ]
@@ -292,6 +400,9 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
             "data": task["progress"],
             "timestamp": _now(),
         })
+
+        # Force unbuffered output so parent can read lines in real time
+        env["PYTHONUNBUFFERED"] = "1"
 
         # Launch subprocess
         proc = await asyncio.create_subprocess_exec(
@@ -518,27 +629,7 @@ async def cancel_mining(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     task = tasks[task_id]
     if task.get("pid"):
-        try:
-            pid = task["pid"]
-            # Try graceful termination first
-            os.kill(pid, signal.SIGTERM)
-            
-            # Wait briefly for cleanup (0.5s)
-            for _ in range(5):
-                try:
-                    os.kill(pid, 0) # Check if alive
-                    await asyncio.sleep(0.1)
-                except ProcessLookupError:
-                    break
-            
-            # Force kill if still running
-            try:
-                os.kill(pid, 0)
-                os.kill(pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-        except ProcessLookupError:
-            pass
+        await _kill_process_tree_async(task["pid"])
     task["status"] = "cancelled"
     task["updatedAt"] = _now()
     await _broadcast(task_id, {
@@ -818,10 +909,7 @@ async def cancel_backtest(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     task = tasks[task_id]
     if task.get("pid"):
-        try:
-            os.kill(task["pid"], signal.SIGTERM)
-        except ProcessLookupError:
-            pass
+        await _kill_process_tree_async(task["pid"])
     task["status"] = "cancelled"
     task["updatedAt"] = _now()
     await _broadcast(task_id, {
@@ -885,15 +973,18 @@ async def _run_backtest(task_id: str, req: BacktestStartRequest, config_path: st
                 python_bin = str(candidate_bin)
                 break
 
-        # Build CLI command
+        # Build CLI command — use -u for unbuffered output
         cmd = [
-            python_bin, "-m", "quantaalpha.backtest.run_backtest",
+            python_bin, "-u", "-m", "quantaalpha.backtest.run_backtest",
             "-c", config_path,
             "--factor-source", req.factorSource,
             "--factor-json", factor_json_str,
             "--skip-uncached",
             "-v",
         ]
+
+        # Force unbuffered output so parent can read lines in real time
+        env["PYTHONUNBUFFERED"] = "1"
 
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -1120,6 +1211,8 @@ async def update_system_config(update: SystemConfigUpdate):
         # Replace existing line or append
         pattern = rf"^{re.escape(key)}\s*=.*$"
         replacement = f"{key}={val}"
+        # Escape backslashes for Windows paths in regex replacement
+        replacement = replacement.replace("\\", "\\\\")
         new_content, n = re.subn(pattern, replacement, content, flags=re.MULTILINE)
         if n > 0:
             content = new_content

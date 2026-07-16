@@ -972,6 +972,12 @@ def calculate_embedding_distance_between_str_list(
     if not source_str_list or not target_str_list:
         return [[]]
 
+    from quantaalpha.llm.config import LLM_SETTINGS
+
+    if not LLM_SETTINGS.embedding_model:
+        # 未配置 embedding 模型时，返回全零相似度，避免调 API 失败拖垮主流程
+        return [[0.0] * len(target_str_list)]
+
     embeddings = APIBackend().create_embedding(source_str_list + target_str_list)
 
     source_embeddings = embeddings[: len(source_str_list)]

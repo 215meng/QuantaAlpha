@@ -30,6 +30,20 @@ else
 fi
 
 # =============================================================================
+# ⚠️ Windows SSL 修复
+# 在所有子进程开始前设置 SSL_CERT_FILE，使 Python 的 ssl 模块使用
+# certifi 证书包而非 Windows 系统证书存储（后者某些证书会导致崩溃）
+# =============================================================================
+if [ -z "${SSL_CERT_FILE}" ]; then
+    _cert_path=$(python -c "import certifi; print(certifi.where())" 2>/dev/null)
+    if [ -n "${_cert_path}" ]; then
+        export SSL_CERT_FILE="${_cert_path}"
+        export REQUESTS_CA_BUNDLE="${_cert_path}"
+    fi
+    unset _cert_path
+fi
+
+# =============================================================================
 # Activate conda environment
 # =============================================================================
 eval "$(conda shell.bash hook)" 2>/dev/null

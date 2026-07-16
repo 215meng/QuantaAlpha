@@ -110,7 +110,7 @@ class LocalEnv(Env[LocalConf]):
         cwd = None
         if local_path:
             cwd = Path(local_path).resolve()
-        result = subprocess.run(command, cwd=cwd, env={**os.environ, **env}, capture_output=True, text=True)
+        result = subprocess.run(command, cwd=cwd, env={**os.environ, **env}, capture_output=True, text=True, encoding='utf-8', errors='replace')
 
         if result.returncode != 0:
             raise RuntimeError(f"Error while running the command: {result.stderr}")
@@ -175,15 +175,9 @@ class QlibLocalEnv(LocalEnv):
         if entry is None:
             entry = self.conf.default_entry
             
-        # Log run info
-        table = Table(title="Local Run Info", show_header=False)
-        table.add_column("Key", style="bold cyan")
-        table.add_column("Value", style="bold magenta")
-        table.add_row("Entry", entry)
-        table.add_row("Working Directory", local_path)
-        table.add_row("Timeout", f"{exec_timeout} seconds")
-        table.add_row("Environment Variables", "\n".join(f"{k}:{v}" for k, v in env.items()))
-        print(table)
+        # Log run info via logger (avoids Rich/colorama GBK crash on Windows)
+        env_str = ", ".join(f"{k}={v}" for k, v in env.items()) if env else "(none)"
+        logger.info(f"[Local Run] entry={entry}  cwd={local_path}  timeout={exec_timeout}s  env={env_str}")
         
         # Split command
         command = entry.split()
@@ -193,7 +187,7 @@ class QlibLocalEnv(LocalEnv):
         if local_path:
             cwd = Path(local_path).resolve()
             
-        print(Rule("[bold green]Starting local execution[/bold green]", style="dark_orange"))
+        logger.info("--- Starting local execution ---")
         
         try:
             # Run command with timeout
@@ -203,20 +197,26 @@ class QlibLocalEnv(LocalEnv):
                 env={**os.environ, **env}, 
                 capture_output=True, 
                 text=True,
+                encoding='utf-8',
+                errors='replace',  # Replace invalid characters instead of raising error
                 timeout=exec_timeout
             )
             
-            # Output result
+            # Output result via logger (completely bypass Rich/colorama/stdout)
             output = result.stdout
-            print(output)
+            if output:
+                # Truncate very long output for log readability
+                log_output = output[:5000] + "\n...(truncated)" if len(output) > 5000 else output
+                logger.info(f"[stdout]:\n{log_output}")
             
             if result.stderr:
-                print(f"[stderr]: {result.stderr}")
+                stderr_log = result.stderr[:3000] + "\n...(truncated)" if len(result.stderr) > 3000 else result.stderr
+                logger.warning(f"[stderr]:\n{stderr_log}")
             
             if result.returncode != 0:
                 error_msg = f"Command failed with return code {result.returncode}"
                 if result.stderr:
-                    error_msg += f"\nError: {result.stderr}"
+                    error_msg += f"\nError: {result.stderr[:2000]}"
                 logger.error(error_msg)
                 raise RuntimeError(error_msg)
             
