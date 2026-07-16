@@ -65,8 +65,13 @@ Document = KnowledgeMetaData
 
 
 def contents_to_documents(contents: List[str], label: str = None) -> List[Document]:
-    # Use configured batch size
     from quantaalpha.llm.config import LLM_SETTINGS
+
+    # 全局禁用 embedding：未配置时为每个文档设置空 embedding
+    if not LLM_SETTINGS.embedding_model:
+        return [Document(content=c, label=label, embedding=[]) for c in contents]
+
+    # Use configured batch size
     size = LLM_SETTINGS.embedding_max_str_num
     embedding = []
     for i in range(0, len(contents), size):
@@ -178,8 +183,11 @@ class PDVectorBase(VectorBase):
             return [], []
         document = Document(content=content)
         document.create_embedding()
+        # embedding 禁用时返回空结果
+        if document.embedding is None or len(document.embedding) == 0:
+            return [], []
         similarities = self.vector_df["embedding"].apply(
-            lambda x: 1 - cosine(x, document.embedding)
+            lambda x: 1 - cosine(x, document.embedding) if x and len(x) > 0 else 0.0
         )  # cosine is cosine distance, 1-similarity
         searched_similarities = similarities[similarities > similarity_threshold].nlargest(topk_k)
         most_similar_docs = self.vector_df.loc[searched_similarities.index]

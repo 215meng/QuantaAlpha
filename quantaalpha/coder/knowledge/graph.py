@@ -81,9 +81,14 @@ class Graph(KnowledgeBase):
 
     @staticmethod
     def batch_embedding(nodes: list[Node]) -> list[Node]:
+        from quantaalpha.llm.config import LLM_SETTINGS
+
+        # 全局禁用 embedding：未配置时跳过，避免 404
+        if not LLM_SETTINGS.embedding_model:
+            return nodes
+
         contents = [node.content for node in nodes]
         # Use configured batch size
-        from quantaalpha.llm.config import LLM_SETTINGS
         size = LLM_SETTINGS.embedding_max_str_num
         embeddings = []
         for i in range(0, len(contents), size):

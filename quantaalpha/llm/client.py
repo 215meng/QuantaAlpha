@@ -608,6 +608,9 @@ class APIBackend:
         )
 
     def create_embedding(self, input_content: str | list[str], **kwargs: Any) -> list[Any] | Any:
+        # 全局禁用 embedding：未配置 embedding_model 时直接返回空，避免 404 拖垮主流程
+        if not LLM_SETTINGS.embedding_model:
+            return []
         input_content_list = [input_content] if isinstance(input_content, str) else input_content
         resp = self._try_create_chat_completion_or_embedding(
             input_content_list=input_content_list,
@@ -971,6 +974,10 @@ def calculate_embedding_distance_between_str_list(
 ) -> list[list[float]]:
     if not source_str_list or not target_str_list:
         return [[]]
+
+    # 未配置 embedding 模型时返回全零相似度
+    if not LLM_SETTINGS.embedding_model:
+        return [[0.0] * len(target_str_list) for _ in source_str_list]
 
     embeddings = APIBackend().create_embedding(source_str_list + target_str_list)
 

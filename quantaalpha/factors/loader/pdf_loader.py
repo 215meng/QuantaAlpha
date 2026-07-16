@@ -475,6 +475,14 @@ Factor variables: {variables}
 """
 
     full_str_list = [factor_name_to_full_str[factor_name] for factor_name in factor_names]
+
+    # 全局禁用 embedding：未配置时所有因子走单组
+    if not LLM_SETTINGS.embedding_model:
+        factor_name_groups = [factor_names]
+        duplication_names_list = []
+        grouped_factor_names = set()
+        return duplication_names_list, factor_name_groups, grouped_factor_names
+
     embeddings = APIBackend.create_embedding(full_str_list)
 
     target_k = None
