@@ -94,12 +94,10 @@ python: can't open file 'E:\py\...\workspace_exp_20260716_090433\f0fd3063638e...
 
 ## 5. 本次会话中的改动与回退
 
-### 我（Claude）唯一改过的文件
+### 我（Claude）改过的文件
 | 文件 | 改动 | 现状 |
 |---|---|---|
 | `configs/experiment.yaml` | 调参：`max_loops 2→1`, `num_directions 2→1`, `mutation/crossover→false`, `timeout 999999→1200`, `free_args 0.5→1.0`, `backtest timeout 800→600` | ✅ 已回退到 git HEAD 原版（先 `.bak` 再 `git checkout HEAD --`）|
-
-**所有其他 git status 中的改动均为用户（或多会话前的我）在更早会话所做**（staged 状态，无提交记录，也无从追溯分明作者）。主要文件：
 
 | 文件 | 改动性质 | 评价 |
 |---|---|---|

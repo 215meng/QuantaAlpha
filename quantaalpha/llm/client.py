@@ -25,6 +25,21 @@ from quantaalpha.llm.config import LLM_SETTINGS
 
 DEFAULT_QLIB_DOT_PATH = Path("./")
 
+# ---------------------------------------------------------------------------
+# 本地 embedding 模型（可选，避免调 API 节省 token）
+# ---------------------------------------------------------------------------
+LOCAL_EMBEDDING_MODEL = None
+_LOCAL_EMBEDDING_MODEL_PATH = Path(__file__).resolve().parent.parent.parent / "models" / "bge-small-zh-v1.5"
+if _LOCAL_EMBEDDING_MODEL_PATH.exists():
+    try:
+        from sentence_transformers import SentenceTransformer
+        import torch
+        _device = "cuda" if torch.cuda.is_available() else "cpu"
+        LOCAL_EMBEDDING_MODEL = SentenceTransformer(str(_LOCAL_EMBEDDING_MODEL_PATH), device=_device)
+        logger.info(f"Local embedding model loaded: {_LOCAL_EMBEDDING_MODEL_PATH} (device={_device})")
+    except Exception as e:
+        logger.warning(f"Failed to load local embedding model: {e}")
+
 
 def md5_hash(input_string: str) -> str:
     hash_md5 = hashlib.md5(usedforsecurity=False)
@@ -608,7 +623,13 @@ class APIBackend:
         )
 
     def create_embedding(self, input_content: str | list[str], **kwargs: Any) -> list[Any] | Any:
-        # 全局禁用 embedding：未配置 embedding_model 时直接返回空，避免 404 拖垮主流程
+        # 优先使用本地 BGE 模型（避免 API 404 + 节省 token）
+        if LOCAL_EMBEDDING_MODEL is not None:
+            texts = [input_content] if isinstance(input_content, str) else input_content
+            embeddings = LOCAL_EMBEDDING_MODEL.encode(texts, normalize_embeddings=True)
+            return embeddings.tolist()[0] if isinstance(input_content, str) else embeddings.tolist()
+
+        # 未配置 embedding 模型时返回空
         if not LLM_SETTINGS.embedding_model:
             return []
         input_content_list = [input_content] if isinstance(input_content, str) else input_content
@@ -975,7 +996,9 @@ def calculate_embedding_distance_between_str_list(
     if not source_str_list or not target_str_list:
         return [[]]
 
-    # 未配置 embedding 模型时返回全零相似度
+    # 本地 embedding 模型不可用时返回全零相似度
+    if LOCAL_EMBEDDING_MODEL is None and not LLM_SETTINGS.embedding_model:
+        return [[0.0] * len(target_str_list) for _ in source_str_list]
     if not LLM_SETTINGS.embedding_model:
         return [[0.0] * len(target_str_list) for _ in source_str_list]
 
