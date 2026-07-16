@@ -108,7 +108,11 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
                                 data_source = Path(__file__).parent.parent.parent.parent.parent / FACTOR_COSTEER_SETTINGS.data_folder
                             daily_pv_link = ws.workspace_path / "daily_pv.h5"
                             if not daily_pv_link.exists() and (data_source / "daily_pv.h5").exists():
-                                os.symlink(str(data_source / "daily_pv.h5"), str(daily_pv_link))
+                                # Windows: 使用硬链接（os.link）避免 symlink 需要管理员特权（WinError 1314）
+                                if sys.platform == "win32":
+                                    os.link(str(data_source / "daily_pv.h5"), str(daily_pv_link))
+                                else:
+                                    os.symlink(str(data_source / "daily_pv.h5"), str(daily_pv_link))
                             
                             # Execute factor
                             import subprocess
