@@ -168,7 +168,13 @@ class QlibLocalEnv(LocalEnv):
         """
         if env is None:
             env = {}
-        
+
+        # Windows 子进程防 pyarrow/qlib 内存分配失败（malloc 小尺寸失败，通常为地址空间碎片化）
+        # 降低 BLAS/Arrow 多线程内存峰值，显著减少碎片化导致的分配失败
+        env.setdefault("OMP_NUM_THREADS", "1")
+        env.setdefault("MKL_NUM_THREADS", "1")
+        env.setdefault("ARROW_IO_THREADS", "1")
+
         # Use provided timeout or instance timeout
         exec_timeout = timeout if timeout is not None else self.timeout
             
