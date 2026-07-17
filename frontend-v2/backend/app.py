@@ -82,6 +82,7 @@ class SystemConfigUpdate(BaseModel):
     OPENAI_BASE_URL: Optional[str] = None
     CHAT_MODEL: Optional[str] = None
     REASONING_MODEL: Optional[str] = None
+    QLIB_RUNNER_CONFIG: Optional[str] = None
 
 
 class ApiResponse(BaseModel):
@@ -1222,16 +1223,20 @@ async def update_system_config(update: SystemConfigUpdate):
 
     import re
     for key, val in updates.items():
-        # Replace existing line or append
         pattern = rf"^{re.escape(key)}\s*=.*$"
-        replacement = f"{key}={val}"
-        # Escape backslashes for Windows paths in regex replacement
-        replacement = replacement.replace("\\", "\\\\")
-        new_content, n = re.subn(pattern, replacement, content, flags=re.MULTILINE)
-        if n > 0:
-            content = new_content
+        # 空字符串表示删除该行（如切回 A 股时移除 QLIB_RUNNER_CONFIG）
+        if val == "":
+            content = re.sub(pattern, "", content, flags=re.MULTILINE)
+            # 清理多余的空行
+            content = re.sub(r"\n{3,}", "\n\n", content)
         else:
-            content += f"\n{replacement}\n"
+            replacement = f"{key}={val}"
+            replacement = replacement.replace("\\", "\\\\")
+            new_content, n = re.subn(pattern, replacement, content, flags=re.MULTILINE)
+            if n > 0:
+                content = new_content
+            else:
+                content += f"\n{replacement}\n"
 
     DOTENV_PATH.write_text(content, encoding="utf-8")
     return ApiResponse(success=True, message="配置已更新")

@@ -154,6 +154,13 @@ export const SettingsPage: React.FC = () => {
       if (config.qlibDataPath) update.QLIB_DATA_DIR = config.qlibDataPath;
       if (config.resultsDir) update.DATA_RESULTS_DIR = config.resultsDir;
 
+      // 🔀 市场切换：crypto → 写 QLIB_RUNNER_CONFIG；A 股/美股 → 删除该行
+      if (config.defaultMarket === 'crypto') {
+        update.QLIB_RUNNER_CONFIG = 'conf_crypto.yaml';
+      } else {
+        update.QLIB_RUNNER_CONFIG = '';  // 空字符串 = 从 .env 删除
+      }
+
       if (Object.keys(update).length > 0) {
         await updateSystemConfig(update);
       }
@@ -474,10 +481,16 @@ export const SettingsPage: React.FC = () => {
                     onChange={(e) => updateConfigField('defaultMarket', e.target.value)}
                     className="w-full rounded-lg border border-input bg-background px-4 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary transition-all"
                   >
-                    <option value="csi300">CSI 300 (沪深300)</option>
-                    <option value="csi500">CSI 500 (中证500)</option>
-                    <option value="sp500">S&P 500</option>
+                    <option value="csi300">CSI 300 (沪深300) — A 股</option>
+                    <option value="csi500">CSI 500 (中证500) — A 股</option>
+                    <option value="sp500">S&P 500 — 美股</option>
+                    <option value="crypto">Top-50 Crypto (BTC/ETH/...) — 加密货币</option>
                   </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {config.defaultMarket === 'crypto'
+                      ? '使用 50 币日线数据 (2020-2025)，24/7 交易，无涨跌停'
+                      : '使用 Qlib 标准 bin 数据'}
+                  </p>
                 </div>
 
                 <div>
