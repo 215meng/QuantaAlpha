@@ -174,14 +174,23 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
         default_cfg = os.environ.get("QLIB_RUNNER_CONFIG", "conf_baseline.yaml")
         config_name = default_cfg if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
         logger.info(f"Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
-        
+
         # Ensure workspace and config are ready (execute() does not call before_execute()).
         exp.experiment_workspace.before_execute()
-        
+
+        # 🔀 子进程需要 MARKET_TYPE 来决定 prompt；同时透传 QLIB_RUNNER_CONFIG
+        run_env = {}
+        market_type = os.environ.get("MARKET_TYPE")
+        if market_type:
+            run_env["MARKET_TYPE"] = market_type
+        qlib_cfg = os.environ.get("QLIB_RUNNER_CONFIG")
+        if qlib_cfg:
+            run_env["QLIB_RUNNER_CONFIG"] = qlib_cfg
+
         # execute() returns (result_df, execute_qlib_log) or (None, execute_qlib_log)
         result_tuple = exp.experiment_workspace.execute(
             qlib_config_name=config_name,
-            run_env={}
+            run_env=run_env,
         )
         
         # Unpack tuple; take first element (DataFrame)

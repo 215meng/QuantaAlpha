@@ -1,14 +1,16 @@
 # =============================================================================
 # QuantaAlpha crypto backtest config
 #
-# 基于 conf_baseline.yaml，针对加密货币（50 币日线）调整：
-#   - provider_uri 指向 data/qlib/crypto_50
-#   - market/benchmark 改为 crypto_50 / BTCUSDT
-#   - 日期范围对齐实际数据（2020-03-06 ~ 2025-06-06）
+# 基于 conf_combined_factors.yaml（复用成熟信号注入路径），
+# 仅覆盖 qlib_init/crypto 特有参数。
+#
+# 关键变更（vs conf_combined_factors.yaml）：
+#   - qlib_init.provider_uri → crypto_50 bin 目录
+#   - market/benchmark → crypto_50 / AAVEUSDT（crypto 池中确认存在）
+#   - ann_scaler=365（crypto 7×24）
 #   - limit_threshold=1.0（crypto 无涨跌停）
-#   - open/close_cost=0.001（千一，按主流交易所）
-#   - ann_scaler=365（crypto 7×24 日线，年化用 365）
 #   - topk=20（50 币中选 top 20）
+#   - 日期：2020-03-06 ~ 2025-06-06
 #
 # 切换方式：
 #   跑 A 股：不设置 QLIB_RUNNER_CONFIG，或设为 conf_baseline.yaml
@@ -20,22 +22,28 @@ qlib_init:
     region: cn
 
 market: &market crypto_50
-benchmark: &benchmark BTCUSDT
+benchmark: &benchmark AAVEUSDT
 
 data_handler_config: &data_handler_config
     start_time: 2020-03-06
     end_time:   2025-06-06
     instruments: *market
     data_loader:
-        class: qlib.contrib.data.loader.QlibDataLoader
+        class: NestedDataLoader
         kwargs:
-            config:
-                feature:
-                    - ["($close-$open)/$open", "$volume/Mean($volume, 20)", "($high-$low)/Ref($close, 1)", "$close/Ref($close, 1)-1"]
-                    - ["OPEN_RET", "VOL_RATIO", "RANGE_RET", "CLOSE_RET"]
-                label:
-                    - ["Ref($close, -2)/Ref($close, -1) - 1"]
-                    - ["LABEL0"]
+            dataloader_l:
+                - class: qlib.contrib.data.loader.QlibDataLoader
+                  kwargs:
+                    config:
+                        feature:
+                            - ["($close-$open)/$open", "$volume/Mean($volume, 20)", "($high-$low)/Ref($close, 1)", "$close/Ref($close, 1)-1"]
+                            - ["OPEN_RET", "VOL_RATIO", "RANGE_RET", "CLOSE_RET"]
+                        label:
+                            - ["Ref($close, -2)/Ref($close, -1) - 1"]
+                            - ["LABEL0"]
+                - class: qlib.data.dataset.loader.StaticDataLoader
+                  kwargs:
+                    config: "combined_factors_df.parquet"
 
     learn_processors:
         - class: Fillna
@@ -73,7 +81,7 @@ port_analysis_config: &port_analysis_config
     backtest:
         start_time: 2024-01-01
         end_time: 2025-06-06
-        account: 1000000
+        account: 100000000
         benchmark: *benchmark
         exchange_kwargs:
             codes: *market
@@ -96,11 +104,11 @@ task:
             lambda_l2: 580.9768
             max_depth: 8
             num_leaves: 210
-            num_threads: 8
+            num_threads: 20
             seed: 42
             random_state: 42
             early_stopping_round: 50
-            num_boost_round: 200
+            num_boost_round: 500
 
     dataset:
         class: DatasetH
