@@ -112,12 +112,15 @@ class EvolutionController:
         self._directions_completed = set()  # Track which directions completed original
         self._crossover_groups: list[list[StrategyTrajectory]] = []  # Current crossover groups
         self._crossover_idx = 0  # Which crossover group is next
-        
+
         # Track active branch count (changes after crossover)
         self._active_branch_count = config.num_directions
         # Track trajectories to mutate in current mutation round
         self._mutation_targets: list[StrategyTrajectory] = []
         self._mutation_idx = 0  # Current index in mutation targets
+
+        # 失败保护：连续失败 round 计数，防止无限循环
+        self._failed_rounds = 0
     
     def get_current_state(self) -> dict[str, Any]:
         """Get current evolution state."""
@@ -293,16 +296,43 @@ class EvolutionController:
     def advance_phase_after_parallel_completion(self, completed_tasks: list[dict[str, Any]]):
         """
         Update controller state after parallel tasks complete.
-        
-        Called after all parallel tasks in a phase complete to 
+
+        Called after all parallel tasks in a phase complete to
         advance the controller to the next phase.
-        
+
         Args:
             completed_tasks: List of completed task dictionaries
         """
         if not completed_tasks:
+            # 防止无限循环：即使所有任务都失败，也要推进 round
+            logger.warning(f"advance_phase_after_parallel_completion: 0 tasks succeeded, force-advancing round to prevent infinite loop")
+            self._current_round += 1
+            self._failed_rounds = getattr(self, '_failed_rounds', 0) + 1
+            # 连续失败达到阈值后，跳过当前 phase
+            if self._failed_rounds >= 3:
+                logger.warning(f"{self._failed_rounds} consecutive failed rounds, transitioning phase")
+                self._failed_rounds = 0
+                if self._current_phase == RoundPhase.ORIGINAL:
+                    for d in range(self.config.num_directions):
+                        self._directions_completed.add(d)
+                    if self.config.mutation_enabled:
+                        self._current_phase = RoundPhase.MUTATION
+                    elif self.config.crossover_enabled:
+                        self._prepare_crossover_groups()
+                        self._current_phase = RoundPhase.CROSSOVER
+                elif self._current_phase == RoundPhase.MUTATION:
+                    self._mutation_idx = len(self._mutation_targets)
+                    self._mutation_targets = []
+                    self._mutation_idx = 0
+                    if self.config.crossover_enabled:
+                        self._prepare_crossover_groups()
+                        self._current_phase = RoundPhase.CROSSOVER
+                elif self._current_phase == RoundPhase.CROSSOVER:
+                    self._crossover_idx = len(self._crossover_groups)
             return
-        
+
+        # 有任务成功，重置失败计数
+        self._failed_rounds = 0
         phase = completed_tasks[0]["phase"]
         
         if phase == RoundPhase.ORIGINAL:
@@ -861,6 +891,37 @@ class EvolutionController:
     def is_complete(self) -> bool:
         """Check if evolution is complete."""
         return self._current_round >= self.config.max_rounds
+
+    def force_advance_round_on_failure(self):
+        """
+        任务失败时强制推进 round，防止无限循环。
+        顺序执行路径中，任务失败后会 continue 重新 get_next_task，
+        但同一个 task 会一直被返回（因为从未 report_task_complete），导致死循环。
+        """
+        logger.warning(f"Force advancing round on failure (current round={self._current_round}, phase={self._current_phase.value})")
+        self._current_round += 1
+        self._failed_rounds = getattr(self, '_failed_rounds', 0) + 1
+        # 连续失败达到阈值后，标记所有 direction 完成以推进 phase
+        if self._failed_rounds >= 3:
+            logger.warning(f"{self._failed_rounds} consecutive failed rounds, marking all directions complete")
+            self._failed_rounds = 0
+            if self._current_phase == RoundPhase.ORIGINAL:
+                for d in range(self.config.num_directions):
+                    self._directions_completed.add(d)
+                if self.config.mutation_enabled:
+                    self._current_phase = RoundPhase.MUTATION
+                elif self.config.crossover_enabled:
+                    self._prepare_crossover_groups()
+                    self._current_phase = RoundPhase.CROSSOVER
+            elif self._current_phase == RoundPhase.MUTATION:
+                self._mutation_idx = len(self._mutation_targets)
+                self._mutation_targets = []
+                self._mutation_idx = 0
+                if self.config.crossover_enabled:
+                    self._prepare_crossover_groups()
+                    self._current_phase = RoundPhase.CROSSOVER
+            elif self._current_phase == RoundPhase.CROSSOVER:
+                self._crossover_idx = len(self._crossover_groups)
     
     def get_best_trajectories(self, top_n: int = 5) -> list[StrategyTrajectory]:
         """Get the best performing trajectories."""

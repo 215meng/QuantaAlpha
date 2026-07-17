@@ -493,6 +493,9 @@ def run_evolution_loop(
                 logger.error(f"Task failed: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
+                # 防止无限循环：失败时也要推进 round
+                logger.warning(f"Force-advancing round after task failure to prevent infinite loop")
+                controller.force_advance_round_on_failure()
                 continue
 
     state_path = Path(log_root) / "evolution_state.json"
