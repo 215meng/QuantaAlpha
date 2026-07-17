@@ -2,15 +2,17 @@
 generate_crypto.py
 将 others/50币/ 下的 1h CSV 转换为日线 h5，供因子挖掘侧使用。
 
+【重要】输出格式必须与 A 股 daily_pv.h5 完全对齐：
+  - MultiIndex: ['datetime', 'instrument']（注意顺序：datetime 在前）
+  - columns: ['$open', '$close', '$high', '$low', '$volume', '$factor', '$return']
+    其中 $factor 是复权因子，crypto 没有复权，填 1.0
+
 输出：
   - daily_pv_all.h5   : 全量 49 币（HOTUSDT 因数据脏被跳过）
   - daily_pv_debug.h5: 前 10 币（用于 CoSTEER 快速调试）
-
-h5 格式：
-  MultiIndex(instrument, datetime)
-  columns: $open, $close, $high, $low, $volume, $return
 """
 
+import numpy as np
 import pandas as pd
 from pathlib import Path
 
@@ -40,6 +42,9 @@ def csv_to_daily(csv_path: str | Path) -> pd.DataFrame:
     # 日收益率
     daily["$return"] = daily["$close"].pct_change().fillna(0)
 
+    # 复权因子：crypto 没有复权，填 1.0
+    daily["$factor"] = 1.0
+
     # 去掉全 NaN 的行（新币上线前没有数据）
     daily = daily.dropna(subset=["$open", "$close"])
 
@@ -63,12 +68,18 @@ def main():
         all_dfs.append(daily)
         print(f"  处理 {coin}: {len(daily)} 天")
 
-    # 合并成 MultiIndex
+    # 合并成 MultiIndex，顺序与 A 股一致：['datetime', 'instrument']
     full = pd.concat(all_dfs)
-    full = full.reorder_levels(["instrument", "datetime"]).sort_index()
+    full = full.reorder_levels(["datetime", "instrument"]).sort_index()
+
+    # 列顺序与 A 股一致
+    full = full[["$open", "$close", "$high", "$low", "$volume", "$factor", "$return"]]
+
     print(f"\n全量数据: {full.index.get_level_values('instrument').nunique()} 币, "
           f"{full.index.get_level_values('datetime').nunique()} 天, "
           f"共 {len(full)} 行")
+    print(f"Index names: {full.index.names}")
+    print(f"Columns: {full.columns.tolist()}")
 
     # 保存全量
     all_h5 = OUTPUT_DIR / "daily_pv_all.h5"
@@ -78,7 +89,7 @@ def main():
     # 保存 debug 子集（前 10 币）
     debug_n = 10
     debug_instruments = full.index.get_level_values("instrument").unique()[:debug_n]
-    debug = full.loc[debug_instruments]
+    debug = full.loc[(slice(None), debug_instruments), :]
     debug_h5 = OUTPUT_DIR / "daily_pv_debug.h5"
     debug.to_hdf(debug_h5, key="data")
     print(f"已保存: {debug_h5} ({debug_n} 币)")
