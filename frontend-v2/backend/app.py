@@ -83,6 +83,7 @@ class SystemConfigUpdate(BaseModel):
     CHAT_MODEL: Optional[str] = None
     REASONING_MODEL: Optional[str] = None
     QLIB_RUNNER_CONFIG: Optional[str] = None
+    MARKET_TYPE: Optional[str] = None
 
 
 class ApiResponse(BaseModel):

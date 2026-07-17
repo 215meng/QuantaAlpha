@@ -1,0 +1,90 @@
+# Crypto 市场专用 prompt — 由 MARKET_TYPE=crypto 触发
+# 与 experiment.yaml 结构完全相同，仅语义适配加密货币
+
+qlib_factor_background: |-
+  ⚠️  CURRENT MARKET: TOP-50 CRYPTOCURRENCIES (BTC, ETH, SOL, etc.)
+  - 24/7 trading (no weekends/holidays)
+  - No price limits (no circuit breakers)
+  - All pairs quoted in USDT (stablecoin)
+  - High volatility (±10-20% daily moves normal)
+  - Cross-sectional universe: ~50 coins per day
+
+  The factor is a characteristic or variable used in quant investment that can help explain the returns and risks of a portfolio or a single asset.
+  Each number in the factor represents a physics value to an instrument on a day.
+  User will train a model to predict the next several days return based on the factor values of the previous days.
+  The factor is defined in the following parts:
+  1. Name: The name of the factor.
+  2. Description: The description of the factor.
+  3. Formulation: The formulation of the factor.
+  4. Expression: The executable expression of the factor.
+  5. Variables: The variables or functions used in the formulation of the factor.
+  The factor might not provide all the parts of the information above since some might not be applicable.
+  Please specifically give all the hyperparameter in the factors like the window size, look back period, and so on. One factor should statically defines one output with a static source data. For example, last 10 days momentum and last 20 days momentum should be two different factors.
+
+qlib_factor_interface: |-
+  Your factor expression should follow the interface to better interact with the user's system.
+  Your expression must use at least one variable (e.g., `$open`). Other parts contain arithmetic operator (`+, -, *, /`), logical operator (`&&, ||`), functions (`DELAY(), EXP()`), and conditional statement (`A?B:C`).
+  User will write your expression into a python template and execute the file directly with "python {your_file_name}.py". The factor values will be saved into a HDF5(H5) file named "result.h5" in the same directory as your python file. The result file is a HDF5(H5) file containing a pandas dataframe. The index of the dataframe is the "datetime" and "instrument", and the single column name is the factor name, and the value is the factor value. The result file should be saved in the same directory as your python file.
+
+qlib_factor_strategy: |-
+  Ensure that for every step of data processing, the data format (including indexes) is explained through comments.
+  Each transformation or calculation should be accompanied by a detailed description of how the data is structured, especially focusing on key aspects like whether the data has multi-level indexing, how to access specific columns or index levels, and any operations that affect the data shape (e.g., `reset_index()`, `groupby()`, `merge()`).
+  Crypto-specific notes: data has no gaps (24/7 trading), every calendar day has a row for each instrument. No market closures.
+
+qlib_factor_output_format: |-
+  Your output should be a pandas dataframe similar to the following example information:
+  <class 'pandas.core.frame.DataFrame'>
+  MultiIndex: 50000 entries, (Timestamp('2023-01-01 00:00:00'), 'BTCUSDT') to (Timestamp('2025-06-06 00:00:00'), 'ZRXUSDT')
+  Data columns (total 1 columns):
+  #   Column            Non-Null Count  Dtype
+  ---  ------            --------------  -----
+  0   your factor name  50000 non-null  float64
+  dtypes: float64(1)
+  memory usage: <ignore>
+  Notice: The non-null count is OK to be different to the total number of entries since some instruments may not have the factor value on some days (new coin listings).
+  One possible format of `result.h5` may be like following:
+  datetime    instrument
+  2023-01-01  BTCUSDT      -0.001796
+              ETHUSDT       0.005780
+              SOLUSDT       0.004228
+              ADAUSDT       0.001298
+              DOGEUSDT      0.005330
+                              ...
+  2025-06-06  SOLUSDT       0.000000
+              ZRXUSDT       0.002459
+
+qlib_factor_simulator: |-
+  The factors will be sent into Qlib to train a model to predict the next several days return based on the factor values of the previous days.
+  Qlib is an AI-oriented quantitative investment platform.
+  User will use Qlib to automatically do the following things:
+  1. generate a new factor table based on the factor values.
+  2. train a model like LightGBM to predict the next several days return based on the factor values.
+  3. build a portfolio based on the predicted return using TopkDropoutStrategy (topk=20, n_drop=3).
+     ⚠️ Crypto-specific: NO limit_threshold (crypto has no price limits - unlimited price movement).
+  4. evaluate the portfolio's performance including the return, sharpe ratio, max drawdown, and so on.
+     ⚠️ Benchmark: BTCUSDT. Annualization scaler: 365 days (24/7 trading, no market closures).
+
+qlib_factor_rich_style_description: |-
+  ### R&D Agent-Qlib: Cryptocurrency Factor Mining Demo
+
+  #### [Overview](#_summary)
+
+  Automated factor mining for top-50 cryptocurrencies (BTC, ETH, SOL, etc.) with 24/7 trading data from 2020-2025.
+
+  #### [Automated R&D](#_rdloops)
+
+  - **[R (Research)](#_research)**
+    - Iterative development of hypotheses for crypto market patterns (momentum, mean-reversion, volatility, cross-sectional).
+  - **[D (Development)](#_development)**
+    - Progressive implementation and code generation of crypto-suitable factors.
+
+  #### [Key Differences from A-Stock](#_crypto_diffs)
+  - 24/7 trading, no market closures
+  - No price limits (unlimited volatility)
+  - Higher baseline volatility
+  - Cross-sectional: 50 coins (not 300+ stocks)
+
+qlib_factor_experiment_setting: |-
+  | Dataset 📊 | Model 🤖    | Factors 🌟       | Data Split  🧮                                   |
+  |---------|----------|---------------|-------------------------------------------------|
+  | Top-50 Crypto | LGBModel | Alpha158 Plus | Train: 2020-03-06 to 2022-12-31 <br> Valid: 2023-01-01 to 2023-12-31 <br> Test &nbsp;: 2024-01-01 to 2025-06-06 |

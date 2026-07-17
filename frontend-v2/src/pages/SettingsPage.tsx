@@ -154,11 +154,13 @@ export const SettingsPage: React.FC = () => {
       if (config.qlibDataPath) update.QLIB_DATA_DIR = config.qlibDataPath;
       if (config.resultsDir) update.DATA_RESULTS_DIR = config.resultsDir;
 
-      // 🔀 市场切换：crypto → 写 QLIB_RUNNER_CONFIG；A 股/美股 → 删除该行
+      // 🔀 市场切换：同步 QLIB_RUNNER_CONFIG + MARKET_TYPE 到 .env
       if (config.defaultMarket === 'crypto') {
         update.QLIB_RUNNER_CONFIG = 'conf_crypto.yaml';
+        update.MARKET_TYPE = 'crypto';
       } else {
         update.QLIB_RUNNER_CONFIG = '';  // 空字符串 = 从 .env 删除
+        update.MARKET_TYPE = 'a_stock';
       }
 
       if (Object.keys(update).length > 0) {
