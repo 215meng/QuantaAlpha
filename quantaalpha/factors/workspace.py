@@ -55,29 +55,25 @@ class QlibFBWorkspace(_RdagentQlibFBWorkspace):
             except Exception:
                 pass
 
-    # ------------------------------------------------------------------
-    # Windows-specific execute() using project's own QlibLocalEnv
-    # ------------------------------------------------------------------
+    def _copy_parquet_if_needed(self):
+        """无条件复制 combined_factors_df.parquet 到当前 workspace。
 
-    def _ensure_parquet_in_workspace(self):
-        """确保 combined_factors_df.parquet 对当前 workspace 可见。
-        解决 ERR-03: StaticDataLoader 在子 workspace（factor 子目录）中找不到 parquet 的问题。
+        解决 ERR-03: StaticDataLoader 在子 workspace（factor 子目录）中
+        找不到 parquet 的问题。qrun 启动时会在 cwd 下找该文件，若缺失则崩溃。
         """
-        import shutil
         parquet_name = "combined_factors_df.parquet"
         target = self.workspace_path / parquet_name
         if target.exists():
-            return  # 已存在，跳过
-        # 在父 workspace 目录查找 parquet
-        parent = self.workspace_path.parent
-        source = parent / parquet_name
+            return
+        source = self.workspace_path.parent / parquet_name
         if source.exists():
-            try:
-                # Windows: 复制（symlink 需要管理员特权）；Linux: 符号链接
-                shutil.copy2(str(source), str(target))
-                logger.info(f"[workspace] Copied {parquet_name} from parent workspace")
-            except Exception as e:
-                logger.warning(f"[workspace] Failed to copy {parquet_name}: {e}")
+            import shutil
+            shutil.copy2(str(source), str(target))
+            logger.info(f"[workspace] Copied {parquet_name} from parent workspace")
+
+    # ------------------------------------------------------------------
+    # Windows-specific execute() using project's own QlibLocalEnv
+    # ------------------------------------------------------------------
 
     def execute(
         self,
@@ -89,7 +85,7 @@ class QlibFBWorkspace(_RdagentQlibFBWorkspace):
         """Execute qlib backtest.
 
         On **Linux / Docker** delegates to the parent rdagent implementation.
-        On **Windows** uses the project's own ``QlibLocalEnv`` which runs commands
+        On **Windows** uses the project's ``QlibLocalEnv`` which runs commands
         via simple ``subprocess.run`` — no symlinks, no ``/bin/sh`` wrapper,
         no ``select.poll``.
         """
@@ -97,8 +93,8 @@ class QlibFBWorkspace(_RdagentQlibFBWorkspace):
             # Non-Windows: use the original rdagent execute path
             return super().execute(qlib_config_name, run_env, *args, **kwargs)
 
-        # 确保 parquet 文件可见（ERR-03 修复）
-        self._ensure_parquet_in_workspace()
+        # 修复 ERR-03: qrun 在子 workspace 运行时找不到 parquet，提前复制
+        self._copy_parquet_if_needed()
 
         # ----- Windows path: use project's own QlibLocalEnv -----
         from quantaalpha.utils.env import QlibLocalEnv
