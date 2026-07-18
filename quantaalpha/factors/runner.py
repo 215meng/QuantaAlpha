@@ -170,32 +170,16 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
 
 
         # Run backtest (local or Docker). Config name must match factor_template files (e.g. conf_baseline.yaml).
-        # 🔀 市场切换：A 股 vs 加密货币（通过 MARKET_TYPE 环境变量）
-        # A 股（默认）: conf_baseline.yaml → conf_combined_factors.yaml
-        # 加密货币      : conf_crypto_baseline.yaml → conf_combined_factors_crypto.yaml
-        _market = os.environ.get("MARKET_TYPE", "a_stock").lower().strip()
-        if _market == "crypto":
-            config_name = "conf_crypto_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors_crypto.yaml"
-        else:
-            config_name = "conf_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
-        logger.info(f"Execute factor backtest (market={_market}, Use {'Local' if use_local else 'Docker container'}): {config_name}")
+        config_name = "conf_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
+        logger.info(f"Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
 
         # Ensure workspace and config are ready (execute() does not call before_execute()).
         exp.experiment_workspace.before_execute()
 
-        # 🔀 子进程需要 MARKET_TYPE 来决定 prompt；同时透传 QLIB_RUNNER_CONFIG
-        run_env = {}
-        market_type = os.environ.get("MARKET_TYPE")
-        if market_type:
-            run_env["MARKET_TYPE"] = market_type
-        qlib_cfg = os.environ.get("QLIB_RUNNER_CONFIG")
-        if qlib_cfg:
-            run_env["QLIB_RUNNER_CONFIG"] = qlib_cfg
-
         # execute() returns (result_df, execute_qlib_log) or (None, execute_qlib_log)
         result_tuple = exp.experiment_workspace.execute(
             qlib_config_name=config_name,
-            run_env=run_env,
+            run_env={},
         )
         
         # Unpack tuple; take first element (DataFrame)
