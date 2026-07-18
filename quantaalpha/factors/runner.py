@@ -170,9 +170,15 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
 
 
         # Run backtest (local or Docker). Config name must match factor_template files (e.g. conf_baseline.yaml).
-        # 与 A 股完全相同：第一轮用 baseline（QlibDataLoader，不依赖 parquet），后续轮用 combined（StaticDataLoader 注入自定义因子）
-        config_name = "conf_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
-        logger.info(f"Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
+        # 🔀 市场切换：A 股 vs 加密货币（通过 MARKET_TYPE 环境变量）
+        # A 股（默认）: conf_baseline.yaml → conf_combined_factors.yaml
+        # 加密货币      : conf_crypto_baseline.yaml → conf_combined_factors_crypto.yaml
+        _market = os.environ.get("MARKET_TYPE", "a_stock").lower().strip()
+        if _market == "crypto":
+            config_name = "conf_crypto_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors_crypto.yaml"
+        else:
+            config_name = "conf_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
+        logger.info(f"Execute factor backtest (market={_market}, Use {'Local' if use_local else 'Docker container'}): {config_name}")
 
         # Ensure workspace and config are ready (execute() does not call before_execute()).
         exp.experiment_workspace.before_execute()
