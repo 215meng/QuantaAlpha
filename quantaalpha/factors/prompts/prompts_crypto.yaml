@@ -157,8 +157,8 @@ factor_experiment_output_format: |-
       "Normalized_Intraday_Range_Factor_10D": {
           "description": "This factor integrates candlestick movement patterns with market volatility to enhance predictive accuracy for short-term price movements. The factor computes the normalized difference between the candlestick body size and the standard deviation of closing prices over a 10-day period.",
           "variables": {
-              "$close": "Close price of the stock on that day.",
-              "$open": "Open price of the stock on that day.",
+              "$close": "Close price of the asset on that day.",
+              "$open": "Open price of the asset on that day.",
               "ABS(A)": "Absolute value of A.",
               "TS_STD(A, n)": "Standard deviation of sequence A over the past n days."
           }
@@ -168,9 +168,9 @@ factor_experiment_output_format: |-
       "Volume_Range_Correlation_Factor_20D": {
           "description": "This factor measures the correlation between the candlestick range (high - low) and the trading volume over a 20-day period, aiming to capture the relationship between price range and market participation.",
           "variables": {
-              "$high": "High price of the stock on that day.",
-              "$low": "Low price of the stock on that day.",
-              "$volume": "Volume of the stock on that day.",
+              "$high": "High price of the asset on that day.",
+              "$low": "Low price of the asset on that day.",
+              "$volume": "Volume of the asset on that day.",
               "TS_CORR(A, B, n)": "Correlation coefficient between sequences A and B over the past n days."
           }
           "formulation": "VRC_\\text{20D} = \\text{TS_CORR}(\\text{high} - \\text{low}, \\text{volume}, 20)",
@@ -418,12 +418,12 @@ hypothesis2experiment:
     {{ hypothesis_and_feedback }}
 
     When constructing factor expressions, you are restricted to utilizing only the following daily-level variable:
-    - $open: open price of the stock on that day.
-    - $close: close price of the stock on that day.
-    - $high: high price of the stock on that day.
-    - $low: low price of the stock on that day.
-    - $volume: volume of the stock on that day.
-    - $return: daily return of the stock on that day.
+    - $open: open price of the asset on that day.
+    - $close: close price of the asset on that day.
+    - $high: high price of the asset on that day.
+    - $low: low price of the asset on that day.
+    - $volume: trading volume of the asset on that day.
+    - $return: daily return of the asset on that day.
 
     Allowed operators and functions in factor expressions are: 
     {{function_lib_description}}

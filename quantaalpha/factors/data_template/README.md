@@ -10,23 +10,15 @@ NOTE: **key is always "data" for all hdf5 files **.
 
 | Filename       | Description                                                      |
 | -------------- | -----------------------------------------------------------------|
-| "daily_pv.h5"  | Daily price and volume data for top-50 cryptocurrencies (2020-2025). |
+| "daily_pv.h5"  | Adjusted daily price and volume data.                            |
 
 
 # For different data, We have some basic knowledge for them
 
 ## Daily data variables
-$open: open price of the cryptocurrency on that day.
-$close: close price of the cryptocurrency on that day.
-$high: high price of the cryptocurrency on that day.
-$low: low price of the cryptocurrency on that day.
-$volume: trading volume (base currency) of the cryptocurrency on that day.
-$return: daily return of the cryptocurrency on that day.
-$factor: adjustment factor (always 1.0 for crypto, no corporate actions).
-
-## Market characteristics
-- **24/7 trading**: Crypto markets never close. Every calendar day has a data point.
-- **Cross-sectional pool**: ~50 coins (BTC, ETH, SOL, etc.) form the universe each day.
-- **High volatility**: Daily returns of ±10-20% are not uncommon.
-- **No price limits**: No circuit breakers or up/down limits.
-- **All prices in USDT**: Stablecoin-quoted, no dividend/split adjustments needed.
+$open: open price of the stock on that day.
+$close: close price of the stock on that day.
+$high: high price of the stock on that day.
+$low: low price of the stock on that day.
+$volume: volume of the stock on that day.
+$return: daily return of the stock on that day.

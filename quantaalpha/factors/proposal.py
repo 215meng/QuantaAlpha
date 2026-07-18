@@ -10,6 +10,7 @@ from quantaalpha.core.prompts import Prompts
 from quantaalpha.core.proposal import Hypothesis, Scenario, Trace
 from quantaalpha.core.experiment import Experiment
 from quantaalpha.factors.experiment import QlibFactorExperiment
+from quantaalpha.factors.market_config import get_prompts_file
 from quantaalpha.llm.client import APIBackend, robust_json_parse
 import os
 import pandas as pd
@@ -85,7 +86,7 @@ class AlphaAgentHypothesis(Hypothesis):
                 concise Specification: {self.concise_specification}
                 """
 
-base_prompt_dict = Prompts(file_path=Path(__file__).parent / "prompts" / "prompts.yaml")
+base_prompt_dict = Prompts(file_path=get_prompts_file())
 
 class QlibFactorHypothesisGen(FactorHypothesisGen):
     def __init__(self, scen: Scenario) -> Tuple[dict, bool]:
@@ -196,7 +197,7 @@ class QlibFactorHypothesis2Experiment(FactorHypothesis2Experiment):
 
 
 
-qa_prompt_dict = Prompts(file_path=Path(__file__).parent / "prompts" / "prompts.yaml")
+qa_prompt_dict = Prompts(file_path=get_prompts_file())
 
 # prompt_dict not as attribute: class instance is pickled later, prompt_dict cannot be pickled
 class AlphaAgentHypothesisGen(FactorHypothesisGen):

@@ -10,6 +10,7 @@ import pandas as pd
 from jinja2 import Environment, StrictUndefined
 
 from quantaalpha.factors.coder.config import FACTOR_COSTEER_SETTINGS
+from quantaalpha.factors.market_config import get_readme_file
 from quantaalpha.utils.env import QTDockerEnv
 from quantaalpha.log import logger
 
@@ -41,8 +42,9 @@ def generate_data_folder_from_qlib(use_local: bool = True):
         daily_pv_all,
         Path(FACTOR_COSTEER_SETTINGS.data_folder) / "daily_pv.h5",
     )
+    readme_file = get_readme_file()
     shutil.copy(
-        Path(__file__).parent / "data_template" / "README.md",
+        readme_file,
         Path(FACTOR_COSTEER_SETTINGS.data_folder) / "README.md",
     )
 
@@ -52,7 +54,7 @@ def generate_data_folder_from_qlib(use_local: bool = True):
         Path(FACTOR_COSTEER_SETTINGS.data_folder_debug) / "daily_pv.h5",
     )
     shutil.copy(
-        Path(__file__).parent / "data_template" / "README.md",
+        readme_file,
         Path(FACTOR_COSTEER_SETTINGS.data_folder_debug) / "README.md",
     )
     

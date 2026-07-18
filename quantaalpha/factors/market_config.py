@@ -30,5 +30,31 @@ def get_prompt_file() -> Path:
     return PROMPTS_DIR / "experiment.yaml"
 
 
+def get_prompts_file() -> Path:
+    """
+    根据 MARKET_TYPE 返回因子生成 prompts yaml 文件。
+    - crypto  → prompts_crypto.yaml（crypto 变量描述用 "asset" 措辞）
+    - 其他    → prompts.yaml（A 股变量描述用 "stock" 措辞）
+    """
+    if get_market_type() == "crypto":
+        crypto_path = PROMPTS_DIR / "prompts_crypto.yaml"
+        if crypto_path.exists():
+            return crypto_path
+    return PROMPTS_DIR / "prompts.yaml"
+
+
+def get_readme_file() -> Path:
+    """
+    根据 MARKET_TYPE 返回数据说明 README 文件。
+    - crypto  → README_crypto.md（crypto 数据描述）
+    - 其他    → README.md（A 股数据描述）
+    """
+    if get_market_type() == "crypto":
+        crypto_path = PROMPTS_DIR.parent / "data_template" / "README_crypto.md"
+        if crypto_path.exists():
+            return crypto_path
+    return PROMPTS_DIR.parent / "data_template" / "README.md"
+
+
 def is_crypto() -> bool:
     return get_market_type() == "crypto"

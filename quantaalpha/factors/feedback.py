@@ -12,6 +12,7 @@ from quantaalpha.core.proposal import (
     HypothesisFeedback,
     Trace,
 )
+from quantaalpha.factors.market_config import get_prompts_file
 from quantaalpha.log import logger
 from quantaalpha.llm.client import APIBackend, robust_json_parse
 from quantaalpha.utils import convert2bool
@@ -19,7 +20,7 @@ from quantaalpha.utils import convert2bool
 # Max retries for JSON parsing
 MAX_JSON_PARSE_RETRIES = 3
 
-base_feedback_prompts = Prompts(file_path=Path(__file__).parent / "prompts" / "prompts.yaml")
+base_feedback_prompts = Prompts(file_path=get_prompts_file())
 DIRNAME = Path(__file__).absolute().resolve().parent
 
 
@@ -211,7 +212,7 @@ class QlibFactorHypothesisExperiment2Feedback(HypothesisExperiment2Feedback):
 
 
 
-qa_feedback_prompts = Prompts(file_path=Path(__file__).parent / "prompts" / "prompts.yaml")
+qa_feedback_prompts = Prompts(file_path=get_prompts_file())
 class AlphaAgentQlibFactorHypothesisExperiment2Feedback(HypothesisExperiment2Feedback):
     def generate_feedback(self, exp: Experiment, hypothesis: Hypothesis, trace: Trace) -> HypothesisFeedback:
         """
