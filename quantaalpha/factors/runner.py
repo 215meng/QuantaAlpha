@@ -172,7 +172,25 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
         # Run backtest (local or Docker). Config name must match factor_template files (e.g. conf_baseline.yaml).
         # 支持通过环境变量 QLIB_RUNNER_CONFIG 切换配置（如 crypto），未设置时保持原 A 股逻辑。
         default_cfg = os.environ.get("QLIB_RUNNER_CONFIG", "conf_baseline.yaml")
-        config_name = default_cfg if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
+        # 🔀 分轮策略：
+        #   第一轮（无 prior experiments）→ 用 baseline 配置（QlibDataLoader，无 parquet）
+        #   后续轮（有 prior experiments）→ 用 combined 配置（StaticDataLoader，有自定义因子注入）
+        # 环境变量 QLIB_RUNNER_CONFIG 仅覆盖第一轮配置，后续轮固定用 conf_combined_factors(_crypto).yaml
+        if len(exp.based_experiments) == 0:
+            # 第一轮：直接用环境变量指定的配置（如 conf_crypto_baseline.yaml）
+            config_name = default_cfg
+        else:
+            # 后续轮：注入自定义因子的配置（conf_combined_factors.yaml / conf_combined_factors_crypto.yaml）
+            if os.environ.get("QLIB_RUNNER_CONFIG"):
+                # 如果有对应 crypto 的 combined 配置，优先使用
+                crypto_combined = "conf_combined_factors_crypto.yaml"
+                crypto_combined_path = Path(__file__).parent / "factor_template" / crypto_combined
+                if crypto_combined_path.exists() and "crypto" in default_cfg.lower():
+                    config_name = crypto_combined
+                else:
+                    config_name = "conf_combined_factors.yaml"
+            else:
+                config_name = "conf_combined_factors.yaml"
         logger.info(f"Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
 
         # Ensure workspace and config are ready (execute() does not call before_execute()).

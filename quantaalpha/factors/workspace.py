@@ -55,22 +55,6 @@ class QlibFBWorkspace(_RdagentQlibFBWorkspace):
             except Exception:
                 pass
 
-    def _copy_parquet_if_needed(self):
-        """无条件复制 combined_factors_df.parquet 到当前 workspace。
-
-        解决 ERR-03: StaticDataLoader 在子 workspace（factor 子目录）中
-        找不到 parquet 的问题。qrun 启动时会在 cwd 下找该文件，若缺失则崩溃。
-        """
-        parquet_name = "combined_factors_df.parquet"
-        target = self.workspace_path / parquet_name
-        if target.exists():
-            return
-        source = self.workspace_path.parent / parquet_name
-        if source.exists():
-            import shutil
-            shutil.copy2(str(source), str(target))
-            logger.info(f"[workspace] Copied {parquet_name} from parent workspace")
-
     # ------------------------------------------------------------------
     # Windows-specific execute() using project's own QlibLocalEnv
     # ------------------------------------------------------------------
@@ -92,9 +76,6 @@ class QlibFBWorkspace(_RdagentQlibFBWorkspace):
         if sys.platform != "win32":
             # Non-Windows: use the original rdagent execute path
             return super().execute(qlib_config_name, run_env, *args, **kwargs)
-
-        # 修复 ERR-03: qrun 在子 workspace 运行时找不到 parquet，提前复制
-        self._copy_parquet_if_needed()
 
         # ----- Windows path: use project's own QlibLocalEnv -----
         from quantaalpha.utils.env import QlibLocalEnv
