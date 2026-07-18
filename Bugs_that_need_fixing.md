@@ -1,55 +1,19 @@
 # Bugs that need fixing
 
 > 每个 bug 的状态：`待审核` → `已审核（待执行）` → `已修复（已归档）`。
-> 修复执行后，bug 归档到 `log/` 文件夹，并从本文件移除。
+> 修复执行后，bug 归档到 `log/` 文件夹，并从本文件移除（仅保留摘要）。
 
 ---
 
-## BUG-002 | crypto 开发污染 A 股共享配置文件（A 股读到 crypto 提示）
+## BUG-002 | crypto 开发污染 A 股共享配置文件（A 股读到 crypto 提示）【已修复归档】
 
-- **状态**：已审核（待执行）
+- **状态**：已修复（`b2a2d14`）→ 归档至 `log/BUG-002_配置文件按市场隔离.md`
 - **日期**：2026-07-18
-- **严重度**：高（A 股产出 crypto 风格因子/报错，与 crypto 报错同源）
-- **模块**：`quantaalpha/factors/prompts/experiment.yaml`、`prompts.yaml`
 
-### 1. 现象
+> 根因：提交 `5d05ebc` 把 crypto 内容写入共享的 `experiment.yaml` / `prompts.yaml` / `README.md`，A 股读到 crypto 提示。
+> 修复：A 股文件 git 回退到 `5d05ebc` 之前（被污染前）；crypto 独立持有 `prompts_crypto.yaml` + `README_crypto.md`；`market_config.py` 新增 `get_prompts_file()` / `get_readme_file()`；`proposal.py` / `feedback.py` / `qlib_utils.py` 全部改为市场感知。
 
-win-debug 分支原本 A 股全链路可跑通。新增加密货币功能（`feature/crypto-data` 分支）后，A 股开始报错，且**报的错与加密货币一样**。
-
-### 2. 根因
-
-crypto 开发把差异内容直接写入了**共享配置文件**，未隔离到 crypto 专属文件：
-
-| 文件 | win-debug（A 股原版） | crypto-data 后被改成 |
-|---|---|---|
-| `experiment.yaml` | CSI300、SH600000、Test 到 2024-12-01 | 加了 "top-50 cryptocurrencies"、BTCUSDT、Test 到 2025 |
-| `prompts.yaml`（仅 `factors/prompts/`） | 11 处 "stock" 措辞 | 11 处改成 "asset" |
-
-而加载路径 `proposal.py` / `feedback.py` 4 处全部硬编码 `prompts.yaml`，不按市场区分 → A 股直接读到了 crypto 内容。
-
-> conf 文件（`conf_baseline.yaml` 等）反而是干净的：A 股 / crypto 已分开。
-
-### 3. 修复方案（已审核通过）
-
-用户明确：「每个市场拷贝一份配置文件，前端选哪个就指向哪个；A 股保持 win-debug 原样；A 股子市场（csi300/500/sp500）保持 win-debug 共用一份」。
-
-1. `experiment.yaml` → `git checkout win-debug` 还原为纯净 A 股
-2. `prompts.yaml` → 还原为 win-debug "stock" 措辞
-3. 新建 `prompts_crypto.yaml`（crypto "asset" 措辞独立副本）
-4. `market_config.py` 新增 `get_prompts_file()`，按 `MARKET_TYPE` 返回对应文件
-5. `proposal.py`（2 处）+ `feedback.py`（2 处）共 4 个加载点改为 `get_prompts_file()`
-
-### 4. 与 BUG-001 的关系
-
-配置污染 ≠ OOM。但 A 股被喂了 crypto 提示后，LLM 会按 crypto 风格生成因子，可能**叠加**放大 OOM 触发概率。二者并列修复。
-
-### 5. 关联改动
-
-- `quantaalpha/factors/market_config.py`：+`get_prompts_file()`
-- `quantaalpha/factors/proposal.py`：2 处加载点切换 + 导入
-- `quantaalpha/factors/feedback.py`：2 处加载点切换 + 导入
-- `quantaalpha/factors/prompts/prompts_crypto.yaml`：新建（crypto 独立副本）
-- `experiment.yaml` / `prompts.yaml`：还原为 win-debug 原版
+---
 
 ## BUG-001 | 主进程 to_parquet OOM（pyarrow malloc 1776960 failed）
 
