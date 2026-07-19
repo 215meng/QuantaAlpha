@@ -15,10 +15,10 @@
 
 ---
 
-## BUG-001 | 主进程 to_parquet OOM（pyarrow malloc 1776960 failed）
+## BUG-001 | 主进程 to_parquet OOM（pyarrow malloc 1776960 failed）【已修复归档】
 
-- **状态**：待审核
-- **日期**：2026-07-18
+- **状态**：已修复（`c9bd230`）→ 归档至 `log/BUG-001_Windows_spawn_to_parquet_OOM.md`
+- **日期**：2026-07-18（修复 2026-07-19）
 - **严重度**：高（阻断 evolution 全流程，0/1 任务成功）
 - **模块**：`quantaalpha/factors/runner.py:168`
 
