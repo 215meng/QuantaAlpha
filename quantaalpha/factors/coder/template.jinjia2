@@ -11,12 +11,16 @@ def calculate_factor(expr: str, name: str):
     # RANK / CS_RANK are computed over the entire market, not just csi300)
     df = pd.read_hdf('./daily_pv.h5', key='data')
     
-    expr = parse_symbol(expr, df.columns)
+    expr = parse_symbol(expr, df.columns)   # 第 1 层：$volume → volume（裸列名）
     expr = parse_expression(expr)
 
-    # replace '$var' by 'df['var'] to extract var's actual values
-    for col in df.columns:
-        expr = expr.replace(col[1:], f"df[\'{col}\']")
+    # 第 2 层（BUG-003-L3 修复）：裸列名 → df['$col']
+    # 按「列名长度降序」处理 + 用 (?<!\w)...(?!\w) 单词边界 → 避免 $open 误改 $open_price
+    import re
+    sorted_cols = sorted(df.columns, key=len, reverse=True)
+    for col in sorted_cols:
+        bare = col.lstrip('$')
+        expr = re.sub(r'(?<!\w)' + re.escape(bare) + r'(?!\w)', f"df[\'{col}\']", expr)
 
     df[name] = eval(expr)
     result = df[name].astype(np.float64)
