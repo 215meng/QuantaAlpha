@@ -98,3 +98,20 @@ combined_factors.to_parquet(parquet_path, engine="pyarrow")   # ← 崩在这里
 
 - commit `f488feb`：子进程 OMP/MKL/ARROW 节流（quantaalpha/utils/env.py）
 - 文档《因子表达式变量幻觉问题分析与修复.md》第 170 行记为「并发问题⑤」
+
+### 8. 为什么原项目（upstream）没有这个问题？（2026-07-19 更新）
+
+代码层完全对齐（runner.py / utils.py / factor_mining.py / conf.py / multi_proc_n 完全一样），**差异仅在运行环境**：
+
+| 维度 | 上游原项目 | 本项目（当前） |
+|---|---|---|
+| **目标平台** | **Linux**（README 明确 "natively developed for Linux"；`docs/WINDOWS_COMPAT.md` 的 Windows 规则全部是 workaround）| Windows 11（原生） |
+| **运行方式** | Docker 容器 或 Linux 主机（exec 链路走 `QlibLocalEnv` 在 **Linux 子进程**） | Windows 本地 `QlibLocalEnv`（自己就是子进程） |
+| **multiprocessing 启动模式** | 默认 **fork**（共享父进程地址空间，Copy-on-Write） | 强制 **spawn**（Windows 唯一可选：重新 import 模块 + 重新初始化所有全局对象） |
+| **子进程内存起点** | fork：起步小，CoW 按需复制 | spawn：每新进程重新 import → `pandarallel.initialize()`、qlib 加载、多层 DataFrame **全量重建** |
+| **pyarrow 转换时的剩余余量** | 大（Linux + fork + Docker 内存上限宽） | 小（spawn 初始化吃掉大量内存 + Windows 家庭版无 pagefile 弹性） |
+| **历史 Windows 文档提及** | `select.poll()` / `/bin/sh` 替代等 workaround，**从未** 提及 parquet/内存/OOM | — |
+
+**结论：BUG-001 是 Windows + spawn-fork 差异叠加的"平台特异性 bug"，上游在 Linux+Docker+fork 下永远触发不了。** 这也解释了为什么 f488feb 修复（子进程 ARROW 节流）能保住 Linux 子进程：它只覆盖了 Linux 一侧，漏网的是 Windows 主进程侧的 to_parquet。
+
+> 推论：修复必须落在「主进程 to_parquet 前回收 + 限制 pyarrow 线程」上（方案 A+B），而不是照搬 Linux 子进程的 env 注入——二者内存路径不同。
