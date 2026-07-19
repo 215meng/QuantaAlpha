@@ -5,7 +5,28 @@ Defines class-path configuration for pipeline components.
 Components are loaded dynamically via string class paths for flexibility.
 """
 
+import os
+
 from quantaalpha.core.conf import ExtendedBaseSettings, ExtendedSettingsConfigDict
+
+
+# =============================================================================
+# Market-aware runner 工厂（BUG-003 修复）
+# =============================================================================
+
+def _select_runner_cls(market_type: str | None = None) -> str:
+    """根据 MARKET_TYPE 返回 runner 类路径。
+
+    - crypto → QlibFactorRunnerCrypto（继承原版 + crypto 配置选择 + daily_pv re-link）
+    - 其他  → QlibFactorRunner（A 股默认）
+
+    供 settings 类定义时调用；读 os.environ["MARKET_TYPE"]， mining 子进程启动时由
+    backend/_run_mining 从 .env 注入，因此本函数在子进程中能正确读到时价。
+    """
+    mt = (market_type or os.environ.get("MARKET_TYPE", "a_stock")).lower().strip()
+    if mt == "crypto":
+        return "quantaalpha.factors.runner_crypto.QlibFactorRunnerCrypto"
+    return "quantaalpha.factors.runner.QlibFactorRunner"
 
 
 # =============================================================================
@@ -53,7 +74,7 @@ class AlphaAgentFactorBasePropSetting(BasePropSetting):
     hypothesis_gen: str = "quantaalpha.factors.proposal.AlphaAgentHypothesisGen"
     hypothesis2experiment: str = "quantaalpha.factors.proposal.AlphaAgentHypothesis2FactorExpression"
     coder: str = "quantaalpha.factors.qlib_coder.QlibFactorParser"
-    runner: str = "quantaalpha.factors.runner.QlibFactorRunner"
+    runner: str = _select_runner_cls()
     summarizer: str = "quantaalpha.factors.feedback.AlphaAgentQlibFactorHypothesisExperiment2Feedback"
     evolving_n: int = 5
 
@@ -66,7 +87,7 @@ class FactorBasePropSetting(BasePropSetting):
     hypothesis_gen: str = "quantaalpha.factors.proposal.QlibFactorHypothesisGen"
     hypothesis2experiment: str = "quantaalpha.factors.proposal.QlibFactorHypothesis2Experiment"
     coder: str = "quantaalpha.factors.qlib_coder.QlibFactorCoSTEER"
-    runner: str = "quantaalpha.factors.runner.QlibFactorRunner"
+    runner: str = _select_runner_cls()
     summarizer: str = "quantaalpha.factors.feedback.QlibFactorHypothesisExperiment2Feedback"
     evolving_n: int = 10
 
@@ -79,7 +100,7 @@ class FactorBackTestBasePropSetting(BasePropSetting):
     hypothesis_gen: str = "quantaalpha.factors.proposal.EmptyHypothesisGen"
     hypothesis2experiment: str = "quantaalpha.factors.proposal.BacktestHypothesis2FactorExpression"
     coder: str = "quantaalpha.factors.qlib_coder.QlibFactorCoder"
-    runner: str = "quantaalpha.factors.runner.QlibFactorRunner"
+    runner: str = _select_runner_cls()
     summarizer: str = "quantaalpha.factors.feedback.QlibFactorHypothesisExperiment2Feedback"
     evolving_n: int = 1
 
