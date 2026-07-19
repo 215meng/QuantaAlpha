@@ -59,7 +59,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         if target.exists() or target.is_symlink():
             try:
                 target.unlink()
-                logger.debug(f"[crypto runner] 删除旧 daily_pv.h5 链接: {target}")
+                logger.info(f"[crypto runner] 删除旧 daily_pv.h5 链接: {target}")
             except Exception as e:
                 logger.warning(f"[crypto runner] 无法删除旧链接 {target}: {e}")
 
@@ -77,7 +77,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
                 shutil.copy2(str(source), str(target))
             else:
                 target.symlink_to(source)
-            logger.debug(f"[crypto runner] 已重新链接 daily_pv.h5 → {source}")
+            logger.info(f"[crypto runner] 已重新链接 daily_pv.h5 → {source}")
         except Exception as e:
             logger.warning(f"[crypto runner] 重新链接失败: {e}")
 
