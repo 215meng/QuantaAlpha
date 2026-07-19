@@ -403,7 +403,7 @@ def rolling_beta(df1_group, df2_group, p):
     return pd.Series(result, index=df1_group.index)
 
 
-def REGBETA(df1: pd.DataFrame, df2: pd.DataFrame, p: int = 5, n_jobs: int = -1):
+def REGBETA(df1: pd.DataFrame, df2: pd.DataFrame, p: int = 5, n_jobs: int = 1):
     """
     Rolling regression coefficient (beta) of df1 on df2.
     """
@@ -473,7 +473,7 @@ def rolling_residuals(df1_group, df2_group, p):
     return pd.Series(result, index=df1_group.index)
 
 
-def REGRESI(df1: pd.DataFrame, df2: pd.DataFrame, p: int = 5, n_jobs: int = -1):
+def REGRESI(df1: pd.DataFrame, df2: pd.DataFrame, p: int = 5, n_jobs: int = 1):
     """
     Rolling residual of df1 on df2.
     """
@@ -914,7 +914,7 @@ def _calculate_rolling_std(group_data):
 
 
 @datatype_adapter
-def BB_MIDDLE(price_df, window, n_jobs=-1):
+def BB_MIDDLE(price_df, window, n_jobs=1):
     """Bollinger Band middle (supports dynamic window, parallel)."""
     if isinstance(window, (int, float)):
         return price_df.groupby('instrument').transform(lambda x: x.rolling(int(window), min_periods=1).mean())
@@ -936,7 +936,7 @@ def BB_MIDDLE(price_df, window, n_jobs=-1):
         return final_result
 
 @datatype_adapter
-def BB_UPPER(price_df, window, n_jobs=-1):
+def BB_UPPER(price_df, window, n_jobs=1):
     """Bollinger Band upper (supports dynamic window, parallel)."""
     
     if isinstance(window, (int, float)):
@@ -962,7 +962,7 @@ def BB_UPPER(price_df, window, n_jobs=-1):
     return middle_band + std
 
 @datatype_adapter
-def BB_LOWER(price_df, window, n_jobs=-1):
+def BB_LOWER(price_df, window, n_jobs=1):
     """Bollinger Band lower (supports dynamic window, parallel)."""
     
     if isinstance(window, (int, float)):
