@@ -15,6 +15,48 @@
 
 ---
 
+## BUG-003 | 前端选加密货币市场，但挖出股票因子（A 股数据/prompt 泄漏）
+
+- **状态**：待审核
+- **日期**：2026-07-19
+- **严重度**：高（crypto 分支名存实跑 A 股，整个 crypto 挖掘结果无效）
+- **现象**：前端 UI 选择"加密货币市场"，全流程跑通，但**挖出的因子是股票因子**。
+- **初步怀疑方向**：
+  1. 前端选的 `market_type=crypto` 参数**未传递到后端**，或后端忽略该参数，默认走 A 股
+  2. `market_config.py` 的 `get_prompts_file()` / `get_readme_file()` 在 crypto 分支下**仍返回 A 股文件路径**
+  3. 数据路径（`data/qlib/cn_data`）写死，crypto 没有独立数据集
+  4. `runner.py` / `experiment.py` 的 `MARKET_TYPE` 环境变量未注入
+- **待验证**：需查清 `market_type` 从前端 → 后端 → runner → 数据/prompt 整条链路
+
+### BUG-003 根因（2026-07-19 确认）
+
+**故障链**（prompt 端 OK，回测配置端断链）：
+
+1. ✅ Settings 页正确：`updateSystemConfig` 把 `MARKET_TYPE=crypto` + `QLIB_RUNNER_CONFIG=conf_crypto.yaml` 写入 `.env`
+2. ✅ 后端 `_run_mining`：`env.update(dotenv)` 把 `MARKET_TYPE=crypto` 注入子进程
+3. ✅ `experiment.py`：`get_prompt_file()` 动态选择 `experiment_crypto.yaml`（prompt 端正确）
+4. ❌ **`runner.py:198`：`config_name = "conf_baseline.yaml" if ... else "conf_combined_factors.yaml"` —— 硬编码 A 股配置名，完全忽略 `QLIB_RUNNER_CONFIG`**
+
+**结论：prompt 是 crypto，但回测配置走 A 股 → 回测结果=股票因子。crypto 的 `conf_crypto.yaml`（crypto_50 / AAVEUSDT）整张配置从未被 runner 读到。**
+
+诊断证据：
+- `.env` 中 `QLIB_RUNNER_CONFIG=conf_crypto.yaml`, `MARKET_TYPE=crypto` 均设好
+- `grep QLIB_RUNNER_CONFIG runner.py` **零命中** — runner 完全不读这个市场切换信号
+- upstream 原版也用相同 A 股配置名，但 upstream 本就不支持 crypto，所以原址不会遇到 → **本 bug 是 crypto 移植的特有毒点**
+
+### 建议修复方向
+
+| 方案 | 描述 | 侵入性 |
+|---|---|---|
+| **A. `runner.py` 读取 `QLIB_RUNNER_CONFIG`**（推荐） | `config_name = os.environ.get("QLIB_RUNNER_CONFIG") or <原硬编码默认值>` — runner 尊重 .env 指定的 crypto 配置；仅改 runner.py:198 一行 | 最小 |
+| **B. 前端直传 market** | `MiningStartParams` + `MiningStartRequest` 加 `market` 字段，后端再 setenv MARKET_TYPE；更直觉但侵入多（api.ts / types / app.py / TaskContext） | 大 |
+
+推荐 **方案 A**：A 股用户不设置 `QLIB_RUNNER_CONFIG`，走默认 path 完全不受影响；crypto 用户在 Settings 页配置 `QLIB_RUNNER_CONFIG=conf_crypto.yaml` 即可生效——无需改前端数据契约。
+
+> 提示：修复后 Settings 页**必须**在跑 mining 点之前就设置 `defaultMarket=crypto`，否则 MiningStartRequest 不传 market，.env 也不会设 QLIB_RUNNER_CONFIG，仍走 A 股。
+
+---
+
 ## BUG-001 | 主进程 to_parquet OOM（pyarrow malloc 1776960 failed）【已修复归档】
 
 - **状态**：已修复（`c9bd230`）→ 归档至 `log/BUG-001_Windows_spawn_to_parquet_OOM.md`
