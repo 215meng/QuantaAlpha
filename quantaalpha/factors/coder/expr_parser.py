@@ -341,14 +341,58 @@ def preprocess_unary_minus(factor_expression):
     return factor_expression
 
 
+def _check_no_tuple_args(factor_expression):
+    """前置校验：检测 tuple 语法作函数参数（如 REGRESI(..., (RSI(...), MACD(...)), ...)）。
+
+    pyparsing 的 infixNotation 不支持逗号分隔的 tuple 作参数，遇到会无限递归导致整个 mining hang 住。
+    这里提前检测并抛出明确错误，让 LLM 重新生成正确表达式。
+    """
+    depth = 0
+    i = 0
+    n = len(factor_expression)
+    while i < n:
+        ch = factor_expression[i]
+        if ch == '(':
+            # 判断是否为函数调用（前面是标识符字符）
+            j = i - 1
+            while j >= 0 and factor_expression[j] in " \t\n":
+                j -= 1
+            is_func_call = j >= 0 and (factor_expression[j].isalnum() or factor_expression[j] in "_$")
+            depth += 1
+            # 非函数调用的括号（即 tuple 分组）且深度 ≥ 2 → 扫描内部是否有同层逗号
+            if not is_func_call and depth >= 2:
+                d = 1
+                k = i + 1
+                while k < n and d > 0:
+                    if factor_expression[k] == "(":
+                        d += 1
+                    elif factor_expression[k] == ")":
+                        d -= 1
+                    elif factor_expression[k] == "," and d == 1:
+                        raise ValueError(
+                            f"因子表达式含 tuple 作参数（位置 {k}），pyparsing 不支持此语法会导致无限递归。"
+                            f"请检查：{factor_expression}"
+                        )
+                    k += 1
+            i += 1
+        elif ch == ")":
+            depth -= 1
+            i += 1
+        else:
+            i += 1
+
+
 def parse_expression(factor_expression):
     check_parentheses_balance(factor_expression)
     check_for_invalid_operators(factor_expression)
-    
+
+    # BUG-003-L6 修复：前置 tuple 语法校验，避免 pyparsing 无限递归导致 mining hang
+    _check_no_tuple_args(factor_expression)
+
     factor_expression = preprocess_unary_minus(factor_expression)
-    
+
     print("factor_expression: ", factor_expression)
-    
+
     parsed_data_function = expr.parseString(factor_expression)[0]
     return parsed_data_function
 
