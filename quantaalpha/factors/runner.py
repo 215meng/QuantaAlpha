@@ -195,7 +195,10 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
 
 
         # Run backtest (local or Docker). Config name must match factor_template files (e.g. conf_baseline.yaml).
-        config_name = "conf_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
+        # BUG-003 修复：.env 中 QLIB_RUNNER_CONFIG 显式指定时优先采用（如 crypto 用 conf_crypto.yaml），
+        # 否则走 A 股默认 baseline / combined 路径。
+        _default_config = "conf_baseline.yaml" if len(exp.based_experiments) == 0 else "conf_combined_factors.yaml"
+        config_name = os.environ.get("QLIB_RUNNER_CONFIG") or _default_config
         logger.info(f"Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
 
         # Ensure workspace and config are ready (execute() does not call before_execute()).
