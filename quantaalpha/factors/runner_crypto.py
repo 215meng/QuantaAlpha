@@ -22,6 +22,16 @@ from quantaalpha.factors.runner import QlibFactorRunner
 from quantaalpha.factors.coder.config import FACTOR_COSTEER_SETTINGS
 from quantaalpha.log import logger
 
+# ── crypto 专属 daily_pv.h5 目录（BUG-003-L2 修复）──────────────────────
+# crypto mining 必须从这个目录硬链接/复制，避免读到 A 股数据。
+# A 股源仍使用 FACTOR_COSTEER_SETTINGS.data_folder（= factor_implementation_source_data）。
+_CRYPTO_DATA_DIR = (
+    Path(__file__).resolve().parent.parent.parent
+    / "data"
+    / "git_ignore_folder"
+    / "factor_implementation_source_data_crypto"
+)
+
 
 class QlibFactorRunnerCrypto(QlibFactorRunner):
     """加密货币专用 runner：继承 A 股原版，覆盖 crypto-specific 方法"""
@@ -55,10 +65,8 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             except Exception as e:
                 logger.warning(f"[crypto runner] 无法删除旧链接 {target}: {e}")
 
-        # 定位源文件
-        data_source = Path(FACTOR_COSTEER_SETTINGS.data_folder).absolute()
-        if not data_source.is_absolute():
-            data_source = Path(__file__).resolve().parent.parent.parent / FACTOR_COSTEER_SETTINGS.data_folder
+        # 定位源文件：crypto 用专属目录（BUG-003-L2 修复），不再读 A 股源
+        data_source = _CRYPTO_DATA_DIR
         source = data_source / parquet_name
 
         if not source.exists():
