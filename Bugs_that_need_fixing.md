@@ -55,6 +55,80 @@
 
 > 提示：修复后 Settings 页**必须**在跑 mining 点之前就设置 `defaultMarket=crypto`，否则 MiningStartRequest 不传 market，.env 也不会设 QLIB_RUNNER_CONFIG，仍走 A 股。
 
+### BUG-003 失败链（2026-07-19 实测复盘）
+
+今天把 runner_crypto 启用了（settings.py 工厂生效，日志证实是 `runner_crypto.develop:134` 失败），但 mining 仍失败：
+
+```
+13:22:47 ❌ runner_crypto.develop:134 - Failed to process factors: No valid factor data found to merge.
+13:22:47 ⚠️ workflow.run:117  - Skip loop 0 due to No valid factor data found to merge.
+```
+
+**失败链（三阶叠加）**：
+
+```
+A 股 daily_pv.h5  ⎫
+泄漏到 crypto   ⎬→ factor.py 列名替换双重处理 → 表达式破坏 → 调试 4 次全 fail
+workspace       ⎭
+```
+
+| 链路 | 位置 | 细节 |
+|---|---|---|
+| **BUG-003-L2（A 股数据泄漏）** | `runner_crypto.py:59` | `_force_relink_daily_pv` 硬编码 `FACTOR_COSTEER_SETTINGS.data_folder`（`factor_implementation_source_data` = A 股源），crypto workspace 内 h5 实际装的是 A 股（instrument 含 SH000300、SH000905 等，**不是 BTC/ETH**）|
+| **BUG-003-L3（factor.py 模板列名 bug）** | `quantaalpha/factors/coder/template.jinjia2:19` | 双重替换 + 子列名重叠误匹配。`parse_symbol` 首轮替换 `$close`→`close` 后，模板 for 循环再做替换，列名有重叠时（`$open` / `$open_price`）会被误改 |
+
+### BUG-003-L2 修复方案
+
+**`_force_relink_daily_pv` 按 `MARKET_TYPE` 选数据源目录**：
+
+```python
+# 新增 crypto 专属数据源路径
+DATA_FOLDER_CRYPTO = "git_ignore_folder/factor_implementation_source_data_crypto"
+
+def _force_relink_daily_pv(self, workspace_path: Path):
+    market_type = os.environ.get("MARKET_TYPE", "a_stock").lower().strip()
+    if market_type == "crypto":
+        data_source = Path(DATA_FOLDER_CRYPTO).absolute()  # ← crypto 源（需新建）
+    else:
+        data_source = Path(FACTOR_COSTEER_SETTINGS.data_folder).absolute()
+    ...
+```
+
+**前置动作**：新建 `git_ignore_folder/factor_implementation_source_data_crypto/`，把 crypto 版 `daily_pv.h5`（列含 `$open`, `$close`, `$high`, `$low`, `$volume`, `$return`, `$factor`；instrument 为 BTC/USDT, ETH/USDT, SOL/USDT 等）放入。
+
+### BUG-003-L3 修复方案
+
+**修正 `template.jinjia2` 列名替换逻辑**：让 `parse_symbol` 单次完成、模板不再做两次替换；并用单词边界匹配避免列名重叠。
+
+```python
+# template.jinjia2 新逻辑
+def calculate_factor(expr: str, name: str):
+    df = pd.read_hdf('./daily_pv.h5', key='data')
+
+    expr = parse_symbol(expr, df.columns)          # 单轮替换：$volume → df['volume']
+    expr = parse_expression(expr)
+
+    df[name] = eval(expr)
+    ...
+```
+
+同时修改 `parse_symbol` 用正则 `\b\w+\b` 做单词级边界匹配，避免 `open` 把 `open_price` 误改：
+
+```python
+# expr_parser.py:parse_symbol
+import re
+for col in columns:
+    bare = col.replace('$', '')
+    expr = re.sub(r'\b' + re.escape(bare) + r'\b', f"df['{col}']", expr)
+```
+
+### 验证清单（实施后）
+
+- [ ] crypto mining 全流程：日志出现 `[crypto] Execute factor backtest` + crypto_50 / AAVEUSDT
+- [ ] workspace 内 `daily_pv.h5` 的 instrument 是 `BTC/USDT`, `ETH/USDT` 而非 `SH000300`
+- [ ] factor.py 模板列名替换后表达式可 eval 通过（4 次调试成功 ≥ 1 次）
+- [ ] 回测结果输**出不是股票因子**（看因子名、因子表达式含 crypto 变量名如 `$close` 但 instrument 是 crypto）
+
 ---
 
 ## BUG-001 | 主进程 to_parquet OOM（pyarrow malloc 1776960 failed）【已修复归档】
