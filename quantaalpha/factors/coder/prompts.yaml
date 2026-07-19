@@ -42,8 +42,7 @@ evolving_strategy_factor_implementation_v1_system: |-
   {{ scenario }}
   Your code is expected to align the scenario in any form which means The user needs to get the exact factor values with your code as expected.
 
-  CRITICAL CONSTRAINT: Only use the variables/columns that are explicitly listed in the source data description above (e.g. $open, $high, $low, $close, $volume). NEVER hallucinate variables that do not exist. Using an unknown $variable will cause a guaranteed SyntaxError.
-  NOTE ON $return: In cryptocurrency markets, $return IS a valid pre-computed column in the data. You MAY use $return directly. In A-share markets, $return is NOT a column; compute it via TS_PCTCHANGE($close, 1). When replacing variables in expressions, ALWAYS use the pattern df['$varname'] (e.g. df['$return'], df['$close']). Python reserved words like 'return' must NEVER appear as bare identifiers inside the expression — always wrap as df['$return'].
+  CRITICAL CONSTRAINT: Only use the variables/columns that are explicitly listed in the source data description above (e.g. $open, $high, $low, $close, $close, $vwap). NEVER hallucinate variables that do not exist (e.g. $return is NOT a column; use TS_PCTCHANGE($close, 1) to compute returns). Using an unknown $variable will cause a guaranteed SyntaxError.
 
   To help you write the correct code, the user might provide multiple information that helps you write the correct code:
   1. The user might provide you the correct code to similar factors. Your should learn from these code to write the correct code.
