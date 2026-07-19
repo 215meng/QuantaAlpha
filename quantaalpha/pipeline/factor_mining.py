@@ -25,6 +25,7 @@ from quantaalpha.pipeline.settings import ALPHA_AGENT_FACTOR_PROP_SETTING
 from quantaalpha.pipeline.planning import generate_parallel_directions
 from quantaalpha.pipeline.planning import load_run_config
 from quantaalpha.pipeline.loop import AlphaAgentLoop
+from quantaalpha.factors.market_config import get_market_type
 from quantaalpha.pipeline.evolution import (
     EvolutionController, 
     EvolutionConfig,
@@ -351,7 +352,9 @@ def run_evolution_loop(
 
     # Generate initial directions
     planning_enabled = bool(planning_cfg.get("enabled", False))
-    prompt_file = planning_cfg.get("prompt_file") or "planning_prompts.yaml"
+    # BUG-003-L7 修复：planning prompt 按 MARKET_TYPE 切换（crypto 用 crypto 专属 prompt）
+    _default_planning_prompt = "planning_prompts_crypto.yaml" if get_market_type() == "crypto" else "planning_prompts.yaml"
+    prompt_file = planning_cfg.get("prompt_file") or _default_planning_prompt
     prompt_path = Path(__file__).parent / "prompts" / str(prompt_file)
     
     if planning_enabled and initial_direction:
@@ -596,7 +599,9 @@ def main(path=None, step_n=100, direction=None, stop_event=None, config_path=Non
             max_attempts = int(planning_cfg.get("max_attempts", 5))
             use_llm = bool(planning_cfg.get("use_llm", True))
             allow_fallback = bool(planning_cfg.get("allow_fallback", True))
-            prompt_file = planning_cfg.get("prompt_file") or "planning_prompts.yaml"
+            # BUG-003-L7 修复：planning prompt 按 MARKET_TYPE 切换
+            _default_planning_prompt = "planning_prompts_crypto.yaml" if get_market_type() == "crypto" else "planning_prompts.yaml"
+            prompt_file = planning_cfg.get("prompt_file") or _default_planning_prompt
             prompt_path = Path(__file__).parent / "prompts" / str(prompt_file)
             if planning_enabled and direction:
                 directions = generate_parallel_directions(
