@@ -14,9 +14,20 @@ def calculate_factor(expr: str, name: str):
     expr = parse_symbol(expr, df.columns)
     expr = parse_expression(expr)
 
-    # replace '$var' by 'df['var'] to extract var's actual values
-    for col in df.columns:
-        expr = expr.replace(col[1:], f"df[\'{col}\']")
+    # 第 2 层（BUG-003-L3/L5 修复）：裸列名 → df['$col']
+    import re, keyword
+    sorted_cols = sorted(df.columns, key=len, reverse=True)
+    # 先整体替换保留字列（$return → df['$return']），避免裸名 return 当变量 eval 失败
+    for col in sorted_cols:
+        bare = col.lstrip('$')
+        if keyword.iskeyword(bare):
+            expr = re.sub(r'\$' + re.escape(bare) + r'\b', f"df[\'{col}\']", expr)
+    # 再替换其他裸名（按列名长度降序 + 单词边界防重叠）
+    for col in sorted_cols:
+        bare = col.lstrip('$')
+        if keyword.iskeyword(bare):
+            continue
+        expr = re.sub(r'(?<!\w)' + re.escape(bare) + r'(?!\w)', f"df[\'{col}\']", expr)
 
     df[name] = eval(expr)
     result = df[name].astype(np.float64)

@@ -355,21 +355,25 @@ def parse_expression(factor_expression):
 
 
 def parse_symbol(expr, columns):
-    replace_map = {}
-    replace_map.update({
-        "TRUE": "True",
-        "true": "True",
-        "FALSE": "False",
-        "false": "False",
-        "NAN": "np.nan",
-        "NaN": "np.nan",
-        "nan": "np.nan",
-        "NULL": "np.nan",
-        "null": "np.nan"
-    })
-    for col in columns:
-        replace_map.update({col: col.replace('$', '')})
-        # replace_map.update({col.replace('$', '').upper(): col.replace('$', '')})
+    """第 1 层：将因子表达式中的 $varname 替换成裸列名 varname（去 $）。
+
+    BUG-003-L3/L5 修复：
+    - 列名按长度降序处理（避免 $open 误改 $open_price）
+    - 遇到 Python 保留字列（如 $return）跳过不脱 $，保留整体交给模板 for 循环替换为 df['$return']
+    """
+    import keyword
+    replace_map = {
+        "TRUE": "True", "true": "True",
+        "FALSE": "False", "false": "False",
+        "NAN": "np.nan", "NaN": "np.nan", "nan": "np.nan",
+        "NULL": "np.nan", "null": "np.nan",
+    }
+    # 列名按长度降序（防子串误匹配）
+    for col in sorted(columns, key=len, reverse=True):
+        bare = col.lstrip('$')
+        if keyword.iskeyword(bare):
+            continue   # 保留 $return，交给模板整体替换为 df['$return']
+        replace_map[col] = bare
 
     for var, var_df in replace_map.items():
         expr = expr.replace(var, var_df)
