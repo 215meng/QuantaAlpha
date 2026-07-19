@@ -89,6 +89,13 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         - 子 workspace 的 daily_pv.h5 强制 re-link (F1)
         - MARKET_TYPE 透传 (F7)
         """
+        # ── 0. BUG-003-L2 关键修复：re-link 必须在 process_factor_data 之前 ──
+        # 原实现把 re-link 放在 process_factor_data 之后，导致 factor.py 执行时
+        # daily_pv.h5 仍是 A 股版本 → result.h5 是 A 股 factor（全 NaN）。
+        for ws in exp.sub_workspace_list:
+            self._force_relink_daily_pv(ws.workspace_path)
+        self._force_relink_daily_pv(exp.experiment_workspace.workspace_path)
+
         # ── A. 处理 prior experiments（与原版一致） ──────────────
         if exp.based_experiments and exp.based_experiments[-1].result is None:
             exp.based_experiments[-1] = self.develop(exp.based_experiments[-1], use_local=use_local)
@@ -158,12 +165,8 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         config_name = self._select_config_name(exp)
         logger.info(f"[crypto] Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
 
-        # ── D. 强制 re-link 子 workspace 的 daily_pv.h5 (F1) ─────
-        for ws in exp.sub_workspace_list:
-            self._force_relink_daily_pv(ws.workspace_path)
-        self._force_relink_daily_pv(exp.experiment_workspace.workspace_path)
-
-        # ── E. MARKET_TYPE 透传 (F7) ─────────────────────────────
+        # ── D. MARKET_TYPE 透传 (F7) ─────────────────────────────
+        # NOTE: re-link 已提前到 develop() 开头，确保 factor eval 使用正确的数据源
         run_env = {"MARKET_TYPE": "crypto"}
 
         # ── F. 执行回测（与原版相同） ────────────────────────────
