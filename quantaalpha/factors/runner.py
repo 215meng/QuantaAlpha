@@ -1,9 +1,11 @@
+import gc
 import pickle
 import sys
 from pathlib import Path
 from typing import List
 import os
 import pandas as pd
+import pyarrow
 from pandarallel import pandarallel
 
 from quantaalpha.core.conf import RD_AGENT_SETTINGS
@@ -163,10 +165,33 @@ class QlibFactorRunner(CachedRunner[QlibFactorExperiment]):
             
             logger.info(f"Factor values this round: \n\n{combined_factors.tail()}\n\n")
 
+            # --- BUG-001 修复：to_parquet 前回收内存 + 限制 pyarrow 线程 + index 压缩 ---
+            # Windows spawn 子进程里 pyarrow 按列并发分配时易在 MultiIndex 转换阶段 OOM，
+            # 所以在写盘前释放中间对象、压到单线程、并把字符串索引压缩为 category。
+            gc.collect()
+            pyarrow.set_cpu_count(1)
+
+            # 压缩 MultiIndex 里的字符串 levels 为 category，压低 pyarrow 转换时的瞬时分配
+            if isinstance(combined_factors.index, pd.MultiIndex):
+                new_levels = [
+                    combined_factors.index.levels[i].astype("category")
+                    if combined_factors.index.levels[i].dtype == object
+                    else combined_factors.index.levels[i]
+                    for i in range(combined_factors.index.nlevels)
+                ]
+                combined_factors.index = combined_factors.index.set_levels(new_levels)
+
             # Save the combined factors to the workspace (parquet format for qlib compatibility)
             parquet_path = exp.experiment_workspace.workspace_path / "combined_factors_df.parquet"
-            combined_factors.to_parquet(parquet_path, engine="pyarrow")
-            logger.info(f"Saved combined factors to {parquet_path}")
+            try:
+                combined_factors.to_parquet(parquet_path, engine="pyarrow")
+                logger.info(f"Saved combined factors to {parquet_path}")
+            except MemoryError:
+                # BUG-001 兜底：MemoryError 时改用无压缩 pyarrow 连续逐列写，
+                # 绕开压缩缓冲区的瞬时双份内存峰值
+                logger.warning("to_parquet 触发 MemoryError，回退到无压缩 pyarrow 兜底写盘")
+                combined_factors.to_parquet(parquet_path, engine="pyarrow", compression="none")
+                logger.info(f"Saved combined factors to {parquet_path} (pyarrow no-compression)")
 
 
         # Run backtest (local or Docker). Config name must match factor_template files (e.g. conf_baseline.yaml).

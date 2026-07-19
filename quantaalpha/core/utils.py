@@ -13,6 +13,8 @@ from typing import Any, ClassVar, NoReturn, cast
 from filelock import FileLock
 from fuzzywuzzy import fuzz  # type: ignore[import-untyped]
 
+from quantaalpha.log import logger
+
 from quantaalpha.core.conf import RD_AGENT_SETTINGS
 from quantaalpha.llm.config import LLM_SETTINGS
 
@@ -191,8 +193,13 @@ def cache_with_pickle(hash_func: Callable, post_process_func: Callable | None = 
             else:
                 result = func(*args, **kwargs)
 
-            with cache_file.open("wb") as f:
-                pickle.dump(result, f)
+            # BUG-001 修复：pickle 缓存失败时（MemoryError / 磁盘满等）静默跳过，
+            # 不影响主流程——缓存只是加速，不是正确性依赖。
+            try:
+                with cache_file.open("wb") as f:
+                    pickle.dump(result, f)
+            except (MemoryError, OSError) as e:
+                logger.warning(f"pickle 缓存写入失败 ({type(e).__name__}: {e})，跳过缓存，主流程继续")
 
             return result
 
