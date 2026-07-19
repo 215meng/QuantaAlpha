@@ -125,13 +125,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             combined_factors.columns = new_columns
             logger.info(f"Factor values this round: \n\n{combined_factors.tail()}\n\n")
             parquet_path = exp.experiment_workspace.workspace_path / "combined_factors_df.parquet"
-            combined_factors.to_hdf(str(parquet_path).replace(".parquet", ".h5"), key="data")
-            try:
-                import pyarrow as pa, pyarrow.parquet as pq
-                table = pa.Table.from_pandas(combined_factors)
-                pq.write_table(table, parquet_path, row_group_size=5000, use_dictionary=True)
-            except Exception:
-                combined_factors.to_parquet(parquet_path, engine="pyarrow")
+            combined_factors.to_parquet(parquet_path, engine="pyarrow")
             logger.info(f"Saved combined factors to {parquet_path}")
         else:
             try:
@@ -151,13 +145,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             combined_factors.columns = new_columns
             logger.info(f"Factor values this round: \n\n{combined_factors.tail()}\n\n")
             parquet_path = exp.experiment_workspace.workspace_path / "combined_factors_df.parquet"
-            combined_factors.to_hdf(str(parquet_path).replace(".parquet", ".h5"), key="data")
-            try:
-                import pyarrow as pa, pyarrow.parquet as pq
-                table = pa.Table.from_pandas(combined_factors)
-                pq.write_table(table, parquet_path, row_group_size=5000, use_dictionary=True)
-            except Exception:
-                combined_factors.to_parquet(parquet_path, engine="pyarrow")
+            combined_factors.to_parquet(parquet_path, engine="pyarrow")
             logger.info(f"Saved combined factors to {parquet_path}")
 
         # ── C. 选择 crypto 配置 (F8) ─────────────────────────────
