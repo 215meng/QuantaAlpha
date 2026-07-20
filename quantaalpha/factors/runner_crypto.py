@@ -151,7 +151,12 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             logger.info(f"Saved combined factors to {parquet_path}")
         else:
             try:
-                new_factors = self.process_factor_data(exp)
+                # 实验性修复：第一轮如果子空间为空，回退到父类 process_factor_data（含容错）
+                if not exp.sub_workspace_list:
+                    logger.warning("[crypto] sub_workspace_list empty in first round, falling back to parent process_factor_data")
+                    new_factors = QlibFactorRunner.process_factor_data(self, exp)
+                else:
+                    new_factors = self.process_factor_data(exp)
             except Exception as e:
                 logger.error(f"Failed to process factors: {e}")
                 raise
