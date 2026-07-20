@@ -105,16 +105,25 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         - 子 workspace 的 daily_pv.h5 强制 re-link (F1)
         - MARKET_TYPE 透传 (F7)
         """
-        # ── 诊断：develop 入口的 exp 状态 ──
+        # ── 诊断：develop 入口的 exp 状态 + 调用来源 ──
+        import traceback
         _sw_count = len(exp.sub_workspace_list) if hasattr(exp, 'sub_workspace_list') else 'N/A'
-        logger.info(f"[DIAG] crypto develop() entered: id(exp)={id(exp)}, sub_workspaces={_sw_count}")
+        _be_count = len(exp.based_experiments) if hasattr(exp, 'based_experiments') else 'N/A'
+        _caller = traceback.format_stack()[-2].strip().split('\n')[-1].strip()  # 调用者
+        logger.info(
+            f"[DIAG] crypto develop() entered: id(exp)={id(exp)}, "
+            f"sub_workspaces={_sw_count}, based_experiments={_be_count}, "
+            f"caller={_caller}"
+        )
         if _sw_count and _sw_count != 'N/A':
             for i, ws in enumerate(exp.sub_workspace_list):
-                logger.info(f"[DIAG]   ws[{i}]: {ws.workspace_path}")
+                _h5 = (ws.workspace_path / "result.h5").exists()
+                logger.info(f"[DIAG]   ws[{i}]: {ws.workspace_path} result.h5={_h5}")
         # ── 诊断结束 ──
         # ── A. 处理 prior experiments（与原版一致） ──────────────
         if exp.based_experiments and exp.based_experiments[-1].result is None:
             exp.based_experiments[-1] = self.develop(exp.based_experiments[-1], use_local=use_local)
+            logger.info(f"[DIAG] recursive develop returned, back in id(exp)={id(exp)}")
 
         # ── B. 收集 SOTA factors（与原版一致） ───────────────────
         if exp.based_experiments:
