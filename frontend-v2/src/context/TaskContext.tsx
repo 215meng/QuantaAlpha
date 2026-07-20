@@ -242,6 +242,7 @@ export const TaskProvider: React.FC<{ children: React.ReactNode }> = ({ children
           librarySuffix: config.librarySuffix || defaults.defaultLibrarySuffix || undefined,
           qualityGateEnabled: config.qualityGateEnabled ?? defaults.qualityGateEnabled ?? true,
           parallelEnabled: config.parallelExecution ?? defaults.parallelExecution ?? false,
+          market: config.market || defaults.defaultMarket,
         });
         if (!resp.success || !resp.data) throw new Error(resp.error || 'Failed');
 

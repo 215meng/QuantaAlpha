@@ -42,6 +42,8 @@ export interface MiningStartParams {
   librarySuffix?: string;
   qualityGateEnabled?: boolean;
   parallelEnabled?: boolean;
+  /** Target market: 'csi300' | 'csi500' | 'sp500' | 'crypto'. Per-task override of global .env MARKET_TYPE. */
+  market?: string;
 }
 
 export async function startMining(params: MiningStartParams) {

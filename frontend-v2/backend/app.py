@@ -65,6 +65,7 @@ class MiningStartRequest(BaseModel):
     librarySuffix: Optional[str] = Field(None, description="Factor library file suffix")
     qualityGateEnabled: Optional[bool] = Field(None, description="Enable quality gate checks")
     parallelEnabled: Optional[bool] = Field(None, description="Enable parallel execution within evolution phases")
+    market: Optional[str] = Field(None, description="Target market: csi300|csi500|sp500|crypto (per-task override)")
 
 
 class BacktestStartRequest(BaseModel):
@@ -281,6 +282,21 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
         # Load .env into env
         dotenv = _load_dotenv_dict()
         env.update(dotenv)
+
+        # 🔀 Per-task market override: set MARKET_TYPE + QLIB_RUNNER_CONFIG for this subprocess
+        # Frontend InputPanel sends market; if absent, fall back to .env global default.
+        _market = req.market
+        if _market == "crypto":
+            env["MARKET_TYPE"] = "crypto"
+            env["QLIB_RUNNER_CONFIG"] = "conf_crypto.yaml"
+            dotenv["MARKET_TYPE"] = "crypto"
+            dotenv["QLIB_RUNNER_CONFIG"] = "conf_crypto.yaml"
+        elif _market in ("csi300", "csi500", "sp500"):
+            env["MARKET_TYPE"] = "a_stock"
+            # Only override runner config if .env did not already set a custom one
+            env.pop("QLIB_RUNNER_CONFIG", None)
+            dotenv.pop("QLIB_RUNNER_CONFIG", None)
+            dotenv["MARKET_TYPE"] = "a_stock"
 
         # Use experiment_id as suffix to guarantee isolation
         experiment_id = f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"

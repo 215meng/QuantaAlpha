@@ -16,7 +16,7 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onSubmit, isRunning }) =
   const [config, setConfig] = useState<Partial<TaskConfig>>({
     numDirections: 2,
     maxRounds: 7,
-    market: 'csi500',
+    market: 'csi300',
     parallelExecution: true,
     qualityGateEnabled: true,
   });
@@ -125,12 +125,14 @@ export const InputPanel: React.FC<InputPanelProps> = ({ onSubmit, isRunning }) =
                   <select
                     value={config.market}
                     onChange={(e) =>
-                      setConfig({ ...config, market: e.target.value as 'csi500' | 'sp500' })
+                      setConfig({ ...config, market: e.target.value as TaskConfig['market'] })
                     }
                     className="w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm"
                   >
-                    <option value="csi500">CSI 500 (中证500)</option>
-                    <option value="sp500">S&P 500</option>
+                    <option value="csi300">CSI 300 (沪深300) — A 股</option>
+                    <option value="csi500">CSI 500 (中证500) — A 股</option>
+                    <option value="sp500">S&P 500 — 美股</option>
+                    <option value="crypto">Top-50 Crypto (BTC/ETH/...) — 加密货币</option>
                   </select>
                 </div>
 
