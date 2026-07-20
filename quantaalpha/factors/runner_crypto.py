@@ -11,6 +11,9 @@ QuantaAlpha Crypto Factor Runner。
 3. MARKET_TYPE 环境变量透传给 qrun 子进程
 """
 
+# 导入时立即打印，确认新代码被加载（诊断用，验证 backend 是否加载最新 runner_crypto.py）
+print("[RUNNER_CRYPTO] module loaded - DIAG version 2026-07-20_1341")
+
 import os
 import shutil
 import sys
@@ -192,6 +195,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
 
     def process_factor_data(self, exp_or_list):
         """覆盖原版：先强制 re-link daily_pv.h5 到最新源文件，再调用 super()。"""
+        logger.info("[DIAG] crypto process_factor_data override called")
         if isinstance(exp_or_list, list):
             exp_list = exp_or_list
         else:
