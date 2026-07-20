@@ -171,7 +171,6 @@ class FactorFBWorkspace(FBWorkspace):
 
             try:
                 # Set PYTHONPATH to include the project root so quantaalpha can be imported
-                import os
                 env = os.environ.copy()
                 project_root = Path(__file__).parent.parent.parent.parent.parent
                 pythonpath = str(project_root)
