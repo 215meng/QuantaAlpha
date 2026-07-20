@@ -237,6 +237,12 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             exp_or_list = [exp_or_list]
         factor_dfs: list[pd.DataFrame] = []
 
+        logger.info(f"[DIAG] outer loop: exp_or_list length={len(exp_or_list)}")
+        for i, exp in enumerate(exp_or_list):
+            sw_count = len(exp.sub_workspace_list) if hasattr(exp, 'sub_workspace_list') else 'N/A'
+            logger.info(f"[DIAG]   outer loop[{i}]: type={type(exp).__name__}, sub_workspaces={sw_count}")
+        # ── 诊断：确认 sub_workspace_list 内容 ──
+
         for exp in exp_or_list:
             message_and_df_list = multiprocessing_wrapper(
                 [(implementation.execute, ("All",)) for implementation in exp.sub_workspace_list],
