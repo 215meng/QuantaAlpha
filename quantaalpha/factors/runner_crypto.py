@@ -97,43 +97,19 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         - crypto 专用配置选择 (F8)
         - 子 workspace 的 daily_pv.h5 强制 re-link (F1)
         - MARKET_TYPE 透传 (F7)
-
-        实验性修复：直接复用父类 QlibFactorRunner.develop() 的 merge 逻辑（已验证可靠），
-        只添加 crypto 特有的配置选择和 MARKET_TYPE 透传。
         """
         # ── 诊断：develop 入口的 exp 状态 ──
         _sw_count = len(exp.sub_workspace_list) if hasattr(exp, 'sub_workspace_list') else 'N/A'
         logger.info(f"[DIAG] crypto develop() entered: id(exp)={id(exp)}, sub_workspaces={_sw_count}")
+        if _sw_count and _sw_count != 'N/A':
+            for i, ws in enumerate(exp.sub_workspace_list):
+                logger.info(f"[DIAG]   ws[{i}]: {ws.workspace_path}")
         # ── 诊断结束 ──
-
-        # ── 选择 crypto 配置 (F8) ─────────────────────────────
-        config_name = self._select_config_name(exp)
-
-        # ── 强制 re-link 子 workspace 的 daily_pv.h5 (F1) ─────
-        for ws in exp.sub_workspace_list:
-            self._force_relink_daily_pv(ws.workspace_path)
-        self._force_relink_daily_pv(exp.experiment_workspace.workspace_path)
-
-        # ── MARKET_TYPE 透传 (F7) ─────────────────────────────
-        run_env = {"MARKET_TYPE": "crypto"}
-
-        # ── 复用父类的 develop 逻辑（merge + backtest）────────
-        # 父类 develop 包含：process_factor_data → merge → backtest
-        # 我们只需要替换 config_name 和 run_env
-        return self._develop_with_parent_logic(exp, use_local=use_local, config_name=config_name, run_env=run_env)
-
-    def _develop_with_parent_logic(self, exp, use_local=True, config_name="conf_crypto_baseline.yaml", run_env=None):
-        """复用父类 QlibFactorRunner.develop() 的核心逻辑，但使用 crypto 配置。"""
-        if run_env is None:
-            run_env = {"MARKET_TYPE": "crypto"}
-
         # ── A. 处理 prior experiments（与原版一致） ──────────────
         if exp.based_experiments and exp.based_experiments[-1].result is None:
-            exp.based_experiments[-1] = self._develop_with_parent_logic(
-                exp.based_experiments[-1], use_local=use_local, config_name=config_name, run_env=run_env
-            )
+            exp.based_experiments[-1] = self.develop(exp.based_experiments[-1], use_local=use_local)
 
-        # ── B. 收集 SOTA factors ───────────────────────────────
+        # ── B. 收集 SOTA factors（与原版一致） ───────────────────
         if exp.based_experiments:
             SOTA_factor = None
             if len(exp.based_experiments) > 1:
@@ -175,7 +151,12 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             logger.info(f"Saved combined factors to {parquet_path}")
         else:
             try:
-                new_factors = self.process_factor_data(exp)
+                # 实验性修复：第一轮如果子空间为空，回退到父类 process_factor_data（含容错）
+                if not exp.sub_workspace_list:
+                    logger.warning("[crypto] sub_workspace_list empty in first round, falling back to parent process_factor_data")
+                    new_factors = QlibFactorRunner.process_factor_data(self, exp)
+                else:
+                    new_factors = self.process_factor_data(exp)
             except Exception as e:
                 logger.error(f"Failed to process factors: {e}")
                 raise
@@ -194,8 +175,19 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
             combined_factors.to_parquet(parquet_path, engine="pyarrow")
             logger.info(f"Saved combined factors to {parquet_path}")
 
-        # ── 执行回测 ────────────────────────────────────────
+        # ── C. 选择 crypto 配置 (F8) ─────────────────────────────
+        config_name = self._select_config_name(exp)
         logger.info(f"[crypto] Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
+
+        # ── D. 强制 re-link 子 workspace 的 daily_pv.h5 (F1) ─────
+        for ws in exp.sub_workspace_list:
+            self._force_relink_daily_pv(ws.workspace_path)
+        self._force_relink_daily_pv(exp.experiment_workspace.workspace_path)
+
+        # ── E. MARKET_TYPE 透传 (F7) ─────────────────────────────
+        run_env = {"MARKET_TYPE": "crypto"}
+
+        # ── F. 执行回测（与原版相同） ────────────────────────────
         exp.experiment_workspace.before_execute()
         result_tuple = exp.experiment_workspace.execute(
             qlib_config_name=config_name,
