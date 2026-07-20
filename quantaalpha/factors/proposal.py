@@ -176,7 +176,8 @@ class QlibFactorHypothesis2Experiment(FactorHypothesis2Experiment):
             )
 
         exp = QlibFactorExperiment(tasks)
-        exp.based_experiments = [QlibFactorExperiment(sub_tasks=[])] + [t[1] for t in trace.hist if t[2]]
+        # 修复：不再创建空的 base 实验，避免 crypto develop() 递归调用时遇到空子空间
+        exp.based_experiments = [t[1] for t in trace.hist if t[2]]
 
         unique_tasks = []
 
@@ -591,7 +592,8 @@ class AlphaAgentHypothesis2FactorExpression(FactorHypothesis2Experiment):
             )
             
         exp = QlibFactorExperiment(tasks)
-        exp.based_experiments = [QlibFactorExperiment(sub_tasks=[])] + [t[1] for t in trace.hist if t[2]]
+        # 修复：不再创建空的 base 实验，避免 crypto develop() 递归调用时遇到空子空间
+        exp.based_experiments = [t[1] for t in trace.hist if t[2]]
 
         unique_tasks = []
 
