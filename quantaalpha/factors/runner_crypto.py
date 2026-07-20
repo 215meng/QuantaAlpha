@@ -220,6 +220,19 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         ``pd.Timedelta(minutes=1) not in time_diff``（分钟级硬编码）替换为
         "time_diff 非空"的一般性检查，兼容日 / 周 / 月等低频数据。
         """
+        # ── 诊断：入口参数 ──
+        logger.info(
+            f"[DIAG] _process_factor_data_daily_safe entered: "
+            f"type={type(exp_or_list).__name__}, "
+            f"is_list={isinstance(exp_or_list, list)}, "
+            f"len={len(exp_or_list) if hasattr(exp_or_list, '__len__') else 'N/A'}"
+        )
+        if isinstance(exp_or_list, list):
+            for i, item in enumerate(exp_or_list):
+                sw_count = len(item.sub_workspace_list) if hasattr(item, 'sub_workspace_list') else 'N/A'
+                logger.info(f"[DIAG]   exp_or_list[{i}]: type={type(item).__name__}, sub_workspaces={sw_count}")
+        # ── 诊断结束 ──
+
         if isinstance(exp_or_list, QlibFactorExperiment):
             exp_or_list = [exp_or_list]
         factor_dfs: list[pd.DataFrame] = []
