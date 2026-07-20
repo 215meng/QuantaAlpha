@@ -341,82 +341,47 @@ def preprocess_unary_minus(factor_expression):
     return factor_expression
 
 
-def _check_no_tuple_args(factor_expression):
-    """前置校验：检测 tuple 语法作函数参数（如 REGRESI(..., (RSI(...), MACD(...)), ...)）。
-
-    pyparsing 的 infixNotation 不支持逗号分隔的 tuple 作参数，遇到会无限递归导致整个 mining hang 住。
-    这里提前检测并抛出明确错误，让 LLM 重新生成正确表达式。
-    """
-    depth = 0
-    i = 0
-    n = len(factor_expression)
-    while i < n:
-        ch = factor_expression[i]
-        if ch == '(':
-            # 判断是否为函数调用（前面是标识符字符）
-            j = i - 1
-            while j >= 0 and factor_expression[j] in " \t\n":
-                j -= 1
-            is_func_call = j >= 0 and (factor_expression[j].isalnum() or factor_expression[j] in "_$")
-            depth += 1
-            # 非函数调用的括号（即 tuple 分组）且深度 ≥ 2 → 扫描内部是否有同层逗号
-            if not is_func_call and depth >= 2:
-                d = 1
-                k = i + 1
-                while k < n and d > 0:
-                    if factor_expression[k] == "(":
-                        d += 1
-                    elif factor_expression[k] == ")":
-                        d -= 1
-                    elif factor_expression[k] == "," and d == 1:
-                        raise ValueError(
-                            f"因子表达式含 tuple 作参数（位置 {k}），pyparsing 不支持此语法会导致无限递归。"
-                            f"请检查：{factor_expression}"
-                        )
-                    k += 1
-            i += 1
-        elif ch == ")":
-            depth -= 1
-            i += 1
-        else:
-            i += 1
-
-
 def parse_expression(factor_expression):
     check_parentheses_balance(factor_expression)
     check_for_invalid_operators(factor_expression)
-
-    # BUG-003-L6 修复：前置 tuple 语法校验，避免 pyparsing 无限递归导致 mining hang
-    _check_no_tuple_args(factor_expression)
-
+    
     factor_expression = preprocess_unary_minus(factor_expression)
-
+    
     print("factor_expression: ", factor_expression)
-
+    
     parsed_data_function = expr.parseString(factor_expression)[0]
     return parsed_data_function
 
 
 
 def parse_symbol(expr, columns):
-    replace_map = {}
-    replace_map.update({
-        "TRUE": "True",
-        "true": "True",
-        "FALSE": "False",
-        "false": "False",
-        "NAN": "np.nan",
-        "NaN": "np.nan",
-        "nan": "np.nan",
-        "NULL": "np.nan",
-        "null": "np.nan"
-    })
-    for col in columns:
-        replace_map.update({col: col.replace('$', '')})
-        # replace_map.update({col.replace('$', '').upper(): col.replace('$', '')})
+    """第 1 层：将因子表达式中的 $varname 替换成裸列名 varname（去 $）。
 
-    for var, var_df in replace_map.items():
-        expr = expr.replace(var, var_df)
+    模板 template.jinjia2 第 2 层（for 循环）再把裸列名换回 df['$varname']。
+    两层配合参考中午成功 baseline：parse_symbol → parse_expression → for 循环。
+
+    BUG-003-L3 修复：
+    - 列名按长度降序处理，确保长列名先被替换（避免短列名 $open 把长列名 $open_price 破坏）
+    - 用 \$ + \b 单词边界正则，只替换带 $ 前缀的列名，避免误消费裸列名
+    - 常量映射放列名之后，避免 np.nan 中的 nan 再被列名替换误匹配
+    """
+    # 1. 列名按长度降序，确保长列名先被替换（防子串误匹配）
+    sorted_cols = sorted(columns, key=len, reverse=True)
+    for col in sorted_cols:
+        bare = col.lstrip('$')           # '$volume' → 'volume'
+        # 把 $volume 替换成裸列名 volume；\b 边界防子串误匹配
+        expr = re.sub(r'\$' + re.escape(bare) + r'\b', bare, expr)
+
+    # 2. 常量映射（放列名之后，避免 np.nan 中的 nan 被列名替换误匹配）
+    const_map = {
+        "TRUE": "True", "true": "True",
+        "FALSE": "False", "false": "False",
+        "NAN": "np.nan", "NaN": "np.nan", "nan": "np.nan",
+        "NULL": "np.nan", "null": "np.nan",
+    }
+    for const, py_val in const_map.items():
+        expr = re.sub(r'\b' + re.escape(const) + r'\b', py_val, expr)
+
     return expr
 
 if __name__ == '__main__':

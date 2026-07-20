@@ -18,11 +18,17 @@ from pathlib import Path
 
 import pandas as pd
 
+from quantaalpha.core.conf import RD_AGENT_SETTINGS
+from quantaalpha.core.exception import FactorEmptyError
+from quantaalpha.core.utils import multiprocessing_wrapper
 from quantaalpha.factors.runner import QlibFactorRunner
 from quantaalpha.factors.coder.config import FACTOR_COSTEER_SETTINGS
+from quantaalpha.factors.experiment import QlibFactorExperiment
 from quantaalpha.log import logger
 
 # ── crypto 专属 daily_pv.h5 目录（BUG-003-L2 修复）──────────────────────
+# crypto mining 必须从这个目录硬链接/复制，避免读到 A 股数据。
+# A 股源仍使用 FACTOR_COSTEER_SETTINGS.data_folder（= factor_implementation_source_data）。
 _CRYPTO_DATA_DIR = (
     Path(__file__).resolve().parent.parent.parent
     / "data"
@@ -59,7 +65,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         if target.exists() or target.is_symlink():
             try:
                 target.unlink()
-                logger.info(f"[crypto runner] 删除旧 daily_pv.h5 链接: {target}")
+                logger.debug(f"[crypto runner] 删除旧 daily_pv.h5 链接: {target}")
             except Exception as e:
                 logger.warning(f"[crypto runner] 无法删除旧链接 {target}: {e}")
 
@@ -77,7 +83,7 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
                 shutil.copy2(str(source), str(target))
             else:
                 target.symlink_to(source)
-            logger.info(f"[crypto runner] 已重新链接 daily_pv.h5 → {source}")
+            logger.debug(f"[crypto runner] 已重新链接 daily_pv.h5 → {source}")
         except Exception as e:
             logger.warning(f"[crypto runner] 重新链接失败: {e}")
 
@@ -89,13 +95,6 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         - 子 workspace 的 daily_pv.h5 强制 re-link (F1)
         - MARKET_TYPE 透传 (F7)
         """
-        # ── 0. BUG-003-L2 关键修复：re-link 必须在 process_factor_data 之前 ──
-        # 原实现把 re-link 放在 process_factor_data 之后，导致 factor.py 执行时
-        # daily_pv.h5 仍是 A 股版本 → result.h5 是 A 股 factor（全 NaN）。
-        for ws in exp.sub_workspace_list:
-            self._force_relink_daily_pv(ws.workspace_path)
-        self._force_relink_daily_pv(exp.experiment_workspace.workspace_path)
-
         # ── A. 处理 prior experiments（与原版一致） ──────────────
         if exp.based_experiments and exp.based_experiments[-1].result is None:
             exp.based_experiments[-1] = self.develop(exp.based_experiments[-1], use_local=use_local)
@@ -165,8 +164,12 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         config_name = self._select_config_name(exp)
         logger.info(f"[crypto] Execute factor backtest (Use {'Local' if use_local else 'Docker container'}): {config_name}")
 
-        # ── D. MARKET_TYPE 透传 (F7) ─────────────────────────────
-        # NOTE: re-link 已提前到 develop() 开头，确保 factor eval 使用正确的数据源
+        # ── D. 强制 re-link 子 workspace 的 daily_pv.h5 (F1) ─────
+        for ws in exp.sub_workspace_list:
+            self._force_relink_daily_pv(ws.workspace_path)
+        self._force_relink_daily_pv(exp.experiment_workspace.workspace_path)
+
+        # ── E. MARKET_TYPE 透传 (F7) ─────────────────────────────
         run_env = {"MARKET_TYPE": "crypto"}
 
         # ── F. 执行回测（与原版相同） ────────────────────────────
@@ -200,4 +203,53 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
                 for ws in exp.sub_workspace_list:
                     self._force_relink_daily_pv(ws.workspace_path)
 
-        return super().process_factor_data(exp_or_list)
+        # 回退到父类通用流程（内部会再次调用 self.process_factor_data，
+        # 由于多态会进入本子类版本 → 需要避免无限递归）。
+        # BUG-003-L4 修复：父类 process_factor_data 在 runner.py:279 有分钟级过滤，
+        # crypto 日线数据会被全部阻断。此处用"父类方法但跳过分钟级过滤"的实现。
+        return self._process_factor_data_daily_safe(exp_or_list)
+
+    def _process_factor_data_daily_safe(self, exp_or_list):
+        """crypto 日线版 process_factor_data：跳过父类分钟级过滤（BUG-003-L4 修复）。
+
+        与父类 QlibFactorRunner.process_factor_data 保持完全一致，仅把
+        ``pd.Timedelta(minutes=1) not in time_diff``（分钟级硬编码）替换为
+        "time_diff 非空"的一般性检查，兼容日 / 周 / 月等低频数据。
+        """
+        if isinstance(exp_or_list, QlibFactorExperiment):
+            exp_or_list = [exp_or_list]
+        factor_dfs: list[pd.DataFrame] = []
+
+        for exp in exp_or_list:
+            message_and_df_list = multiprocessing_wrapper(
+                [(implementation.execute, ("All",)) for implementation in exp.sub_workspace_list],
+                n=RD_AGENT_SETTINGS.multi_proc_n,
+            )
+            for idx, (message, df) in enumerate(message_and_df_list):
+                if df is not None and "datetime" in df.index.names:
+                    if idx < len(exp.sub_workspace_list):
+                        ws = exp.sub_workspace_list[idx]
+                        result_h5 = ws.workspace_path / "result.h5"
+                        try:
+                            df.to_hdf(str(result_h5), key="data")
+                        except Exception as e:
+                            logger.debug(f"Could not refresh result.h5 for {ws.workspace_path}: {e}")
+
+                    if isinstance(df, pd.Series):
+                        if idx < len(exp.sub_workspace_list):
+                            factor_name = getattr(exp.sub_workspace_list[idx].target_task, "factor_name", None)
+                            if factor_name:
+                                df = df.to_frame(name=factor_name)
+                            else:
+                                df = df.to_frame(name=df.name if df.name else f"factor_{idx}")
+                        else:
+                            df = df.to_frame(name=df.name if df.name else f"factor_{idx}")
+
+                    # BUG-003-L4 修复：用一般性 time_diff 检查替换分钟级硬编码
+                    time_diff = df.index.get_level_values("datetime").to_series().diff().dropna().unique()
+                    if len(time_diff) > 0:   # ← 原：pd.Timedelta(minutes=1) not in time_diff
+                        factor_dfs.append(df)
+
+        if factor_dfs:
+            return pd.concat(factor_dfs, axis=1)
+        raise FactorEmptyError("No valid factor data found to merge.")
