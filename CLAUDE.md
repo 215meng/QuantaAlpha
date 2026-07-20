@@ -1,6 +1,6 @@
 # QuantaAlpha 项目指南
 
-> **版本**: 2026-07-20 · **负责人**: 甘泉晔 (215meng) · **阶段**: A 股基线已稳定可跑；crypto 市场移植进行中（feature/crypto-data 分支）
+> **版本**: 2026-07-20 · **负责人**: 甘泉晔 (215meng) · **阶段**: A 股基线已稳定可跑；**crypto 市场移植已完成，端到端验证通过**（feature/crypto-data 分支）
 
 ---
 
@@ -296,19 +296,26 @@ debug 过程中遇到难以解决的问题或"屎山"时，能**快速回退到�
 1. **commit message** 加前缀（如 `[partial] crypto mining: 生成 3 个因子但回测 NaN`）
 2. **重要锚点打 tag**（推荐，最便于回退）：
    ```bash
-   git tag -a v0.3-crypto-partial -m "[partial] crypto mining 生成因子成功，回测 NaN 待修"
-   git tag -a v0.2-a-stock-baseline -m "[success] A 股基线完全成功，IC=0.03"
+   git tag -a v0.5-crypto-mining-works -m "[success] crypto 端到端成功，Rank IC=0.033"
+   git tag -a v0.2-a-stock-baseline -m "[success] A 股基线稳定可跑"
    git push origin --tags
    ```
+
+**当前已知锚点**：
+| Tag | 分支 | 状态 | 说明 |
+|---|---|---|---|
+| `v0.5-crypto-mining-works` | feature/crypto-data | 🟢 完全成功 | crypto 端到端通过，3 因子入库 |
+| `v0.4-crypto-data-path-fixed` | feature/crypto-data | 🟡 部分成功 | 数据路径修复，但 merge 仍失败 |
+| `v0.2-a-stock-baseline` | win-debug | 🟢 完全成功 | A 股基线稳定 |
+| `v0.1.0-crypto-data-isolation` | feature/crypto-data | 🟡 部分成功 | L2+L3 修复，端到端验证通过 |
 
 **回退锚点**：
 ```bash
 # 查看成功锚点
-git tag -l "*success*" -l "*partial*"
-git tag -l | grep -E "success|partial"
+git tag -l | grep -E "success|partial|works|baseline"
 
 # 回退到某个成功版本（创建新分支保留现场）
-git checkout -b crypto-fix-attempt2 v0.3-crypto-partial
+git checkout -b crypto-fix-attempt3 v0.5-crypto-mining-works
 ```
 
 ### 分支策略
@@ -437,6 +444,14 @@ git push origin feature/crypto-data
 ### 11.4 清理原则
 
 `Bugs_that_need_fixing.md` 只放**未修复的 bug**；修复即归档、归档即清理，保持活跃列表干净。
+
+### 11.5 已修复 Bug 记录
+
+| Bug | 修复 commit | 验证 |
+|---|---|---|
+| BUG-001 to_parquet OOM | `c9bd230` | ✅ 已归档 |
+| BUG-002 配置文件污染 | `b2a2d14` | ✅ 已归档 |
+| BUG-003 crypto 市场隔离 | `b456daa` | ✅ **端到端验证通过**（Rank IC=0.033，3 个 crypto 因子入库） |
 
 ---
 
