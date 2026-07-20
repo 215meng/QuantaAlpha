@@ -64,6 +64,13 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         parquet_name = "daily_pv.h5"
         target = Path(workspace_path) / parquet_name
 
+        # 确保目标目录存在（调试失败的因子可能没有目录）
+        try:
+            target.parent.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            logger.warning(f"[crypto runner] 无法创建目录 {target.parent}: {e}")
+            return
+
         # 删除旧链接 / 文件
         if target.exists() or target.is_symlink():
             try:
