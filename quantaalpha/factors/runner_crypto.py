@@ -226,6 +226,19 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
                 n=RD_AGENT_SETTINGS.multi_proc_n,
             )
             for idx, (message, df) in enumerate(message_and_df_list):
+                # ── 诊断日志：记录 execute() 返回值 ──
+                if df is None:
+                    logger.warning(
+                        f"[DIAG] merge execute() returned df=None for sub_ws[{idx}]; "
+                        f"message={message[:200]!r}"
+                    )
+                else:
+                    logger.info(
+                        f"[DIAG] merge execute() returned df: type={type(df).__name__}, "
+                        f"shape={getattr(df, 'shape', None)}, index.names={getattr(df.index, 'names', None)}, "
+                        f"'datetime' in index.names={'datetime' in getattr(df.index, 'names', [])}"
+                    )
+                # ── 诊断日志结束 ──
                 if df is not None and "datetime" in df.index.names:
                     if idx < len(exp.sub_workspace_list):
                         ws = exp.sub_workspace_list[idx]
