@@ -127,3 +127,6 @@ release-notes.md
 
 # ---- Sphinx documentation ----
 docs/_build/
+
+# ---- Project guide (privacy: contains personal info) ----
+CLAUDE.md
