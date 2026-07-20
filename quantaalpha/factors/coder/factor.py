@@ -128,20 +128,22 @@ class FactorFBWorkspace(FBWorkspace):
             else:
                 return self.FB_CODE_NOT_SET, None
         with FileLock(self.workspace_path / "execution.lock"):
-            # Set data path for all versions
-            source_data_path = (
-                Path(
-                    FACTOR_COSTEER_SETTINGS.data_folder_debug,
-                )
-                if data_type == "Debug"  # FIXME: (yx) don't think we should use a debug tag for this.
-                else Path(
-                    FACTOR_COSTEER_SETTINGS.data_folder,
-                )
-            )
+            # ── Resolve data source based on market type ──
+            _market_type = os.environ.get("MARKET_TYPE", "a_stock").lower().strip()
+            if _market_type == "crypto":
+                # Crypto data: data/git_ignore_folder/factor_implementation_source_data_crypto
+                _data_rel = "data/git_ignore_folder/factor_implementation_source_data_crypto"
+            elif data_type == "Debug":
+                _data_rel = FACTOR_COSTEER_SETTINGS.data_folder_debug
+            else:
+                _data_rel = FACTOR_COSTEER_SETTINGS.data_folder
 
-            # Use absolute path
+            source_data_path = Path(_data_rel)
             if not source_data_path.is_absolute():
-                source_data_path = self.workspace_path.parent.parent.parent / source_data_path
+                # Resolve relative to repo root (parent of quantaalpha/, data/, configs/)
+                # __file__ = <repo>/quantaalpha/factors/coder/factor.py
+                _proj_root = Path(__file__).resolve().parent.parent.parent.parent
+                source_data_path = _proj_root / source_data_path
             else:
                 source_data_path = Path(source_data_path).absolute()
 
@@ -149,10 +151,11 @@ class FactorFBWorkspace(FBWorkspace):
             code_path = self.workspace_path / f"factor.py"
 
             # Ensure data path exists and has files
+            from quantaalpha.log import logger
             if source_data_path.exists() and any(source_data_path.iterdir()):
+                logger.info(f"[factor executor] linking data from {source_data_path} (market={_market_type}, ws={self.workspace_path.name})")
                 self.link_all_files_in_folder_to_workspace(source_data_path, self.workspace_path)
             else:
-                from quantaalpha.log import logger
                 logger.warning(f"Data folder {source_data_path} does not exist or is empty. Skipping linking.")
 
             execution_feedback = self.FB_EXECUTION_SUCCEEDED
