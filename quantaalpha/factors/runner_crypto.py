@@ -98,6 +98,13 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
         - 子 workspace 的 daily_pv.h5 强制 re-link (F1)
         - MARKET_TYPE 透传 (F7)
         """
+        # ── 诊断：develop 入口的 exp 状态 ──
+        _sw_count = len(exp.sub_workspace_list) if hasattr(exp, 'sub_workspace_list') else 'N/A'
+        logger.info(f"[DIAG] crypto develop() entered: id(exp)={id(exp)}, sub_workspaces={_sw_count}")
+        if _sw_count and _sw_count != 'N/A':
+            for i, ws in enumerate(exp.sub_workspace_list):
+                logger.info(f"[DIAG]   ws[{i}]: {ws.workspace_path}")
+        # ── 诊断结束 ──
         # ── A. 处理 prior experiments（与原版一致） ──────────────
         if exp.based_experiments and exp.based_experiments[-1].result is None:
             exp.based_experiments[-1] = self.develop(exp.based_experiments[-1], use_local=use_local)
