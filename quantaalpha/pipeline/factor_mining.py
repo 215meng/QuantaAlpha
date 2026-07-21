@@ -38,6 +38,19 @@ from quantaalpha.log.time import measure_time
 from quantaalpha.llm.config import LLM_SETTINGS
 
 
+# ---------------------------------------------------------------------------
+# 跨 task 的轨迹实验注册表 (BUG-003-L5 修复):
+# key   = trajectory_id
+# value = (hypothesis, experiment, feedback)  —— 与 trace.hist 的 3-元组同形
+#
+# 进化循环每轮 task 新建 AlphaAgentLoop 时 trace.hist 为空，导致
+# convert_response 无法构建 based_experiments。通过本注册表把父任务的
+# (hypothesis, experiment, feedback) 在新 task 启动时注入其 trace.hist，
+# 使后续轮次能正确切换到 combined 配置、让 custom 因子参与回测。
+# ---------------------------------------------------------------------------
+_TRACE_EXPERIMENT_REGISTRY: dict[str, tuple] = {}
+
+
 
 
 def force_timeout():
@@ -164,6 +177,21 @@ def _run_evolution_task(
 
     logger.info(f"Starting evolution task: phase={phase.value}, round={round_idx}, direction={direction_id}")
 
+    # ------------------------------------------------------------------
+    # 收集父任务历史注入新 loop (BUG-003-L5):
+    # 从注册表取出父任务的 (hypothesis, experiment, feedback)，
+    # 作为 parent_history 传给新 AlphaAgentLoop，使其 trace.hist 非空，
+    # 从而 convert_response 能正确构建 based_experiments。
+    # ------------------------------------------------------------------
+    parent_history = []
+    for pid in parent_ids:
+        entry = _TRACE_EXPERIMENT_REGISTRY.get(pid)
+        if entry is not None:
+            parent_history.append(entry)
+            logger.info(f"[TRACE] resolved parent history from {pid}")
+        else:
+            logger.warning(f"[TRACE] parent trajectory {pid} NOT found in registry")
+
     # Create and run loop
     model_loop = AlphaAgentLoop(
         ALPHA_AGENT_FACTOR_PROP_SETTING,
@@ -177,15 +205,28 @@ def _run_evolution_task(
         direction_id=direction_id,
         round_idx=round_idx,
         quality_gate_config=quality_gate_cfg or {},
+        parent_history=parent_history if parent_history else None,
     )
     model_loop.user_initial_direction = user_direction
-    
+
     # Run one small loop (5 steps)
     model_loop.run(step_n=step_n, stop_event=stop_event)
 
+    # ------------------------------------------------------------------
+    # 把本轮的 (hypothesis, experiment, feedback) 存入注册表，
+    # 供后续子任务作为 parent_history 使用。
+    # ------------------------------------------------------------------
+    if model_loop.trace.hist:
+        # 取最近一轮（即本轮产出）
+        latest = model_loop.trace.hist[-1]
+        _TRACE_EXPERIMENT_REGISTRY[trajectory_id] = latest
+        logger.info(f"[TRACE] registered trajectory {trajectory_id} -> registry (size={len(_TRACE_EXPERIMENT_REGISTRY)})")
+    else:
+        logger.warning(f"[TRACE] trajectory {trajectory_id} has no hist after run")
+
     traj_data = model_loop._get_trajectory_data()
     traj_data["task"] = task
-    
+
     return traj_data
 
 

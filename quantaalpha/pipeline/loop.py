@@ -52,10 +52,10 @@ class AlphaAgentLoop(LoopBase, metaclass=LoopMeta):
     
     @measure_time
     def __init__(
-        self, 
-        PROP_SETTING: BaseFacSetting, 
-        potential_direction, 
-        stop_event: threading.Event, 
+        self,
+        PROP_SETTING: BaseFacSetting,
+        potential_direction,
+        stop_event: threading.Event,
         use_local: bool = True,
         strategy_suffix: str = "",
         evolution_phase: str = "original",
@@ -64,6 +64,7 @@ class AlphaAgentLoop(LoopBase, metaclass=LoopMeta):
         direction_id: int = 0,
         round_idx: int = 0,
         quality_gate_config: dict = None,
+        parent_history: list = None,
     ):
         with logger.tag("init"):
             self.use_local = use_local
@@ -125,7 +126,21 @@ class AlphaAgentLoop(LoopBase, metaclass=LoopMeta):
             self.summarizer: HypothesisExperiment2Feedback = import_class(PROP_SETTING.summarizer)(scen)
             logger.log_object(self.summarizer, tag="summarizer")
             self.trace = Trace(scen=scen)
-            
+
+            # ------------------------------------------------------------------
+            # 注入父任务历史 (BUG-003-L5 修复):
+            # 进化循环每轮 task 新建 AlphaAgentLoop 时 trace.hist 为空，
+            # 导致 QlibFactorHypothesis2Experiment.convert_response 中的
+            #   exp.based_experiments = [t[1] for t in trace.hist if t[2]]
+            # 永远为空 -> develop() 永远选 baseline 配置 -> custom 因子永不参与回测。
+            # 通过 parent_history 把父任务的 (hypothesis, experiment, feedback)
+            # 注入新 loop 的 trace.hist，使 convert_response 能正确构建
+            # based_experiments，从而在后续轮次切换到 combined 配置。
+            # ------------------------------------------------------------------
+            if parent_history:
+                self.trace.hist.extend(parent_history)
+                logger.info(f"[TRACE] injected {len(parent_history)} parent history entries (trajectory_id={trajectory_id})")
+
             global STOP_EVENT
             STOP_EVENT = stop_event
             super().__init__()
