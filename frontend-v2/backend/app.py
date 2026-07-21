@@ -73,6 +73,7 @@ class BacktestStartRequest(BaseModel):
     factorJson: str = Field(..., description="Path to factor library JSON")
     factorSource: str = Field("custom", description="custom | combined")
     configPath: Optional[str] = Field(None, description="Path to backtest config")
+    market: Optional[str] = Field(None, description="Market type: csi300 | crypto")
 
 
 class SystemConfigUpdate(BaseModel):
@@ -925,7 +926,15 @@ async def get_factor_detail(factor_id: str):
 async def start_backtest(req: BacktestStartRequest):
     """Start an independent backtest."""
     task_id = _gen_id()
-    config_path = req.configPath or str(PROJECT_ROOT / "configs" / "backtest.yaml")
+
+    # Route config based on market
+    if req.configPath:
+        config_path = req.configPath
+    elif req.market == "crypto":
+        config_path = str(PROJECT_ROOT / "configs" / "backtest_crypto.yaml")
+        req.factorSource = "custom"  # Crypto only supports custom
+    else:
+        config_path = str(PROJECT_ROOT / "configs" / "backtest.yaml")
 
     task = {
         "taskId": task_id,
