@@ -10,6 +10,9 @@
 # Global random seed (for reproducibility)
 random_seed: 42
 
+# Annual scaler: A-share 252 trading days, Crypto 365 days
+ann_scaler: 252
+
 experiment:
   name: "backtest_v2_experiment"
   recorder: "backtest_v2_recorder"
