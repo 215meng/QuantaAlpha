@@ -44,15 +44,12 @@ class QlibFactorRunnerCrypto(QlibFactorRunner):
     """加密货币专用 runner：继承 A 股原版，覆盖 crypto-specific 方法"""
 
     # ── crypto 配置名 ──────────────────────────────────────────
-    _CFG_ROUND1 = "conf_crypto_baseline.yaml"
-    _CFG_ROUND2PLUS = "conf_combined_factors_crypto.yaml"
+    _CFG_CUSTOM_ONLY = "conf_custom_only_crypto.yaml"
 
-    # ── 1. 配置选择（F8 修复） ─────────────────────────────────
+    # ── 1. 配置选择 ─────────────────────────────────
     def _select_config_name(self, exp) -> str:
-        """根据实验进度选择 crypto baseline 或 combined 配置。"""
-        if len(exp.based_experiments) == 0:
-            return self._CFG_ROUND1
-        return self._CFG_ROUND2PLUS
+        """所有轮次统一使用 custom-only 配置（不使用 baseline）。"""
+        return self._CFG_CUSTOM_ONLY
 
     # ── 2. 硬链接维护（F1 修复） ─────────────────────────────────
     def _force_relink_daily_pv(self, workspace_path: Path):

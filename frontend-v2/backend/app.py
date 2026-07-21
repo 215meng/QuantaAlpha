@@ -289,8 +289,12 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
         if _market == "crypto":
             env["MARKET_TYPE"] = "crypto"
             env["QLIB_RUNNER_CONFIG"] = "conf_crypto.yaml"
+            env["QLIB_DATA_DIR"] = str(PROJECT_ROOT / "data" / "qlib" / "crypto_50")
+            env["QLIB_PROVIDER_URI"] = str(PROJECT_ROOT / "data" / "qlib" / "crypto_50")
             dotenv["MARKET_TYPE"] = "crypto"
             dotenv["QLIB_RUNNER_CONFIG"] = "conf_crypto.yaml"
+            dotenv["QLIB_DATA_DIR"] = str(PROJECT_ROOT / "data" / "qlib" / "crypto_50")
+            dotenv["QLIB_PROVIDER_URI"] = str(PROJECT_ROOT / "data" / "qlib" / "crypto_50")
         elif _market in ("csi300", "csi500", "sp500"):
             env["MARKET_TYPE"] = "a_stock"
             # Only override runner config if .env did not already set a custom one
