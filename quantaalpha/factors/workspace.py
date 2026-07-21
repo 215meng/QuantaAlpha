@@ -12,6 +12,7 @@ Overrides rdagent QlibFBWorkspace:
   LocalEnv to override, don't modify third-party packages*.
 """
 
+import os
 import re
 import subprocess
 import sys
@@ -82,6 +83,18 @@ class QlibFBWorkspace(_RdagentQlibFBWorkspace):
 
         env = QlibLocalEnv()
         env.prepare()
+
+        # ------------------------------------------------------------------
+        # Inject PROVIDER_URI into run_env so that read_exp_res.py (executed
+        # in Step 2) initialises qlib against the correct market domain.
+        # Without this, read_exp_res.py's bare qlib.init() falls back to the
+        # A-share (cn_data) default and extracts the wrong recorder.
+        # ------------------------------------------------------------------
+        _PROVIDER_CRYPTO = "E:\\py\\github_QuantaAlpha\\QuantaAlpha\\data\\qlib\\crypto_50"
+        _PROVIDER_A_STOCK = "E:\\py\\github_QuantaAlpha\\QuantaAlpha\\data\\qlib\\cn_data"
+        run_env["PROVIDER_URI"] = (
+            _PROVIDER_CRYPTO if os.environ.get("MARKET_TYPE") == "crypto" else _PROVIDER_A_STOCK
+        )
 
         workspace_path_str = str(self.workspace_path)
 
