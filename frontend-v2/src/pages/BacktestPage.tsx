@@ -140,6 +140,7 @@ export const BacktestPage: React.FC = () => {
   const [libraries, setLibraries] = useState<string[]>([]);
   // Initialize with saved library from localStorage if available
   const [selectedLibrary, setSelectedLibrary] = useState(localStorage.getItem('quantaalpha_active_library') || '');
+  const [market, setMarket] = useState<'csi300' | 'crypto'>('csi300');
   const [factorSource, setFactorSource] = useState<'custom' | 'combined'>('custom');
   const [factorCount, setFactorCount] = useState(0);
   const [isStarting, setIsStarting] = useState(false);
@@ -217,6 +218,7 @@ export const BacktestPage: React.FC = () => {
       await startBacktestTask({
         factorJson: selectedLibrary,
         factorSource,
+        market,
       });
     } catch (err: any) {
       console.error('Failed to start backtest:', err);
@@ -360,6 +362,37 @@ export const BacktestPage: React.FC = () => {
               </p>
             </div>
 
+            {/* Market */}
+            <div>
+              <label className="block text-sm font-medium mb-2">市场</label>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setMarket('csi300')}
+                  disabled={isRunning}
+                  className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                    market === 'csi300'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-input bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  CSI 300
+                  <span className="block text-xs font-normal mt-0.5">沪深300 | SH000300</span>
+                </button>
+                <button
+                  onClick={() => { setMarket('crypto'); setFactorSource('custom'); }}
+                  disabled={isRunning}
+                  className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                    market === 'crypto'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-input bg-background text-muted-foreground hover:border-primary/50'
+                  }`}
+                >
+                  Crypto Top-50
+                  <span className="block text-xs font-normal mt-0.5">Top50 | BTC_ETH_EQ</span>
+                </button>
+              </div>
+            </div>
+
             {/* Factor Source */}
             <div>
               <label className="block text-sm font-medium mb-2">因子源类型</label>
@@ -378,15 +411,19 @@ export const BacktestPage: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setFactorSource('combined')}
-                  disabled={isRunning}
+                  disabled={isRunning || market === 'crypto'}
                   className={`flex-1 px-4 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                     factorSource === 'combined'
                       ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-input bg-background text-muted-foreground hover:border-primary/50'
+                      : market === 'crypto'
+                        ? 'border-input bg-background/50 text-muted-foreground/50 cursor-not-allowed'
+                        : 'border-input bg-background text-muted-foreground hover:border-primary/50'
                   }`}
                 >
                   Combined
-                  <span className="block text-xs font-normal mt-0.5">自定义 + Alpha158(20)</span>
+                  <span className="block text-xs font-normal mt-0.5">
+                    {market === 'crypto' ? 'Crypto 不支持' : '自定义 + Alpha158(20)'}
+                  </span>
                 </button>
               </div>
             </div>
