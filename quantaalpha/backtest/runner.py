@@ -516,7 +516,8 @@ class BacktestRunner:
             
             # Compute IC metrics
             try:
-                sar = SigAnaRecord(recorder=R.get_recorder(), ana_long_short=False, ann_scaler=252)
+                ann_scaler = self.config.get('ann_scaler', 252)
+                sar = SigAnaRecord(recorder=R.get_recorder(), ana_long_short=False, ann_scaler=ann_scaler)
                 sar.generate()
                 
                 recorder = R.get_recorder()
@@ -648,7 +649,8 @@ class BacktestRunner:
                             except Exception as csv_err:
                                 logger.warning(f"Failed to save daily CSV: {csv_err}")
 
-                            analysis = risk_analysis(excess_return_with_cost)
+                            ann_scaler = self.config.get('ann_scaler', 252)
+                            analysis = risk_analysis(excess_return_with_cost, N=ann_scaler)
                             
                             if isinstance(analysis, pd.DataFrame):
                                 analysis = analysis['risk'] if 'risk' in analysis.columns else analysis.iloc[:, 0]
