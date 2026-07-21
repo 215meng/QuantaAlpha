@@ -143,6 +143,7 @@ export interface BacktestStartParams {
   factorJson: string;
   factorSource?: string;
   configPath?: string;
+  market?: string;  // "csi300" | "crypto"
 }
 
 export async function startBacktest(params: BacktestStartParams) {
