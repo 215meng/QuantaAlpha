@@ -226,6 +226,9 @@ def _run_evolution_task(
 
     traj_data = model_loop._get_trajectory_data()
     traj_data["task"] = task
+    # 把本轮使用的 trajectory_id 传回，供 run_evolution_loop 创建 pool entry 时
+    # 使用同一个 id (保证 registry key == pool trajectory_id，子任务才能查到 parent)
+    traj_data["trajectory_id"] = trajectory_id
 
     return traj_data
 
@@ -491,11 +494,13 @@ def run_evolution_loop(
                 if result["success"]:
                     task = result["task"]
                     traj_data = result["traj_data"]
+                    # 使用 _run_evolution_task 返回的 trajectory_id，保证与 registry key 一致
                     trajectory = controller.create_trajectory_from_loop_result(
                         task=task,
                         hypothesis=traj_data.get("hypothesis"),
                         experiment=traj_data.get("experiment"),
                         feedback=traj_data.get("feedback"),
+                        trajectory_id=traj_data.get("trajectory_id"),
                     )
                     controller.report_task_complete(task, trajectory)
                     completed_tasks.append(task)
@@ -527,11 +532,13 @@ def run_evolution_loop(
                     stop_event=stop_event,
                     quality_gate_cfg=quality_gate_cfg,
                 )
+                # 使用 _run_evolution_task 返回的 trajectory_id，保证与 registry key 一致
                 trajectory = controller.create_trajectory_from_loop_result(
                     task=task,
                     hypothesis=traj_data.get("hypothesis"),
                     experiment=traj_data.get("experiment"),
                     feedback=traj_data.get("feedback"),
+                    trajectory_id=traj_data.get("trajectory_id"),
                 )
                 controller.report_task_complete(task, trajectory)
                 logger.info(f"Task done: trajectory_id={trajectory.trajectory_id}, RankIC={trajectory.get_primary_metric()}")

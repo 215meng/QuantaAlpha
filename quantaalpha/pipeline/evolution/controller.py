@@ -742,26 +742,31 @@ class EvolutionController:
         task: dict[str, Any],
         hypothesis: Any,
         experiment: Any,
-        feedback: Any
+        feedback: Any,
+        trajectory_id: str = None,
     ) -> StrategyTrajectory:
         """
         Create a trajectory from loop execution results.
-        
+
         Args:
             task: The task that was executed
             hypothesis: The hypothesis object
             experiment: The experiment object (with factors and results)
             feedback: The feedback object
-            
+            trajectory_id: 外部传入的 trajectory_id (来自 _run_evolution_task)。
+                          如果提供则使用此值，保证 pool entry 的 id 与 registry key
+                          一致，子任务才能通过 parent_trajectory_ids 查到 parent。
+                          为 None 时保持旧行为 (自行生成随机 id)。
+
         Returns:
             A new StrategyTrajectory
         """
         phase = task["phase"]
         direction_id = task["direction_id"]
         round_idx = task["round_idx"]
-        
-        # Generate trajectory ID
-        traj_id = StrategyTrajectory.generate_id(direction_id, round_idx, phase)
+
+        # 优先使用外部传入的 trajectory_id (保证 registry/pool id 一致)
+        traj_id = trajectory_id or StrategyTrajectory.generate_id(direction_id, round_idx, phase)
         
         # Extract hypothesis info
         hypothesis_text = str(hypothesis) if hypothesis else ""
