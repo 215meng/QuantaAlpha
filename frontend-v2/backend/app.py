@@ -446,6 +446,34 @@ async def _run_mining(task_id: str, req: MiningStartRequest):
         )
         task["pid"] = proc.pid
 
+        # ━━━ 注入运行环境信息（白箱增强，便于定位 miner 配置问题）━━━
+        _env_info = [
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "🚀 Mining 运行环境",
+            f"   direction:       {req.direction}",
+            f"   market:          {_market}",
+            f"   MARKET_TYPE:     {env.get('MARKET_TYPE', 'a_stock')}",
+            f"   QLIB_RUNNER_CONFIG: {env.get('QLIB_RUNNER_CONFIG', '(默认)')}",
+            f"   config_path:     {cmd[-1]}",
+            f"   python:          {sys.executable}",
+            f"   workdir:         {str(PROJECT_ROOT)}",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        ]
+        for _line in _env_info:
+            _entry = {
+                "id": _gen_id(),
+                "timestamp": _now(),
+                "level": "info",
+                "message": _line[:500],
+            }
+            task["logs"].append(_entry)
+            await _broadcast(task_id, {
+                "type": "log",
+                "taskId": task_id,
+                "data": _entry,
+                "timestamp": _now(),
+            })
+
         # Stream stdout line by line
         line_count = 0
         current_phase = "planning"
