@@ -177,17 +177,7 @@ class QlibFactorHypothesis2Experiment(FactorHypothesis2Experiment):
 
         exp = QlibFactorExperiment(tasks)
         # 修复：不再创建空的 base 实验，避免 crypto develop() 递归调用时遇到空子空间
-        # 诊断: 打印 trace.hist 结构 (DEBUG-TRACE)
-        logger.info(f"[DEBUG-TRACE] convert_response: trace.hist len={len(trace.hist)}")
-        for _i, _t in enumerate(trace.hist):
-            _tlen = len(_t) if hasattr(_t, "__len__") else None
-            logger.info(
-                f"[DEBUG-TRACE]   hist[{_i}]: type={type(_t).__name__} len={_tlen} "
-                f"t[1]type={type(_t[1]).__name__ if _tlen and _tlen > 1 else '?'} "
-                f"t[2]truthy={bool(_t[2]) if _tlen and _tlen > 2 else '?'}"
-            )
         exp.based_experiments = [t[1] for t in trace.hist if t[2]]
-        logger.info(f"[DEBUG-TRACE] convert_response: based_experiments={len(exp.based_experiments)}")
 
         unique_tasks = []
 
